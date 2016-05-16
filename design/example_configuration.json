@@ -1,0 +1,16 @@
+{
+	"slices" : [
+		{
+			"controller"    : "127.0.0.1:3353",
+			"address_space" : "192.168.0.0/24",
+			"switches"      : [
+				{
+					"datapath_id"        : 0,
+					"internal_bandwidth" : 500,
+					"ports"              : [0,1,2,3]
+				}
+			]
+		}
+	],
+	"switch_endpoint" : "127.0.0.1:3355"
+}
