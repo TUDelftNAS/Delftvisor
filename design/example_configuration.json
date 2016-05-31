@@ -1,7 +1,19 @@
 {
 	"slices" : [
 		{
-			"controller"    : "127.0.0.1:3353",
+			"controller"    : {
+				"operation"   : "parallel",
+				"controllers" : [
+					{
+						"operation"  : "normal",
+						"controller" : "127.0.0.1:3353"
+					},
+					{
+						"operation"  : "normal",
+						"controller" : "127.0.0.1:3352"
+					}
+				]
+			},
 			"address_space" : "192.168.0.0/24",
 			"switches"      : [
 				{
