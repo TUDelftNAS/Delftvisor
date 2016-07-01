@@ -1,25 +1,15 @@
 {
 	"slices" : [
 		{
-			"controller"    : {
-				"operation"   : "parallel",
-				"controllers" : [
-					{
-						"operation"  : "normal",
-						"controller" : "127.0.0.1:3353"
-					},
-					{
-						"operation"  : "normal",
-						"controller" : "127.0.0.1:3352"
-					}
-				]
+			"controller"     : {
+				"controller" : "127.0.0.1:3353"
 			},
-			"address_space" : "192.168.0.0/24",
-			"switches"      : [
+			"address_space"  : "192.168.0.0/24",
+			"max_rate"       : 500,
+			"switches"       : [
 				{
-					"datapath_id"        : 0,
-					"internal_bandwidth" : 500,
-					"ports"              : [0,1,2,3]
+					"datapath_id" : 0,
+					"ports"       : [0,1,2,3]
 				}
 			]
 		}
