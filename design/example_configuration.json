@@ -1,15 +1,17 @@
 {
 	"slices" : [
 		{
-			"controller"     : {
-				"controller" : "127.0.0.1:3353"
-			},
-			"address_space"  : "192.168.0.0/24",
-			"max_rate"       : 500,
-			"switches"       : [
+			"controller"       : "127.0.0.1:3353",
+			"max_rate"         : 500,
+			"virtual_switches" : [
 				{
-					"datapath_id" : 0,
-					"ports"       : [0,1,2,3]
+					"datapath_id"    : 0,
+					"physical_ports" : [
+						{
+							"datapath_id" : 0,
+							"ports"       : [0,1,2,3]
+						}
+					]
 				}
 			]
 		}
