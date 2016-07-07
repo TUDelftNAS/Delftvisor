@@ -1,34 +1,43 @@
 This document should summarize the design decisions taken when building the Hypervisor.
 
-# Abstraction
+# Isolation requirements
+This section list some the concepts of what needs to be isolated.
 
-## Flowtable abstraction
+## Switch features isolation
+Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
 
-## Addres space abstraction
-Always rewrite to internal representation at edge
-If the in or out port is connected to a switch
+## Addres space isolation
+Each slice needs to be able to use the full ethernet/ip address space without clashing with another slice.
 
-## 
+## Bandwidth isolation
+Each slice should get a guaranteed slice of the bandwidth.
 
 ## Topology abstraction
+Each virtual switch doesn't need to correspond 1:1 to a physical switch.
 
 # Flowtable layout
 The following section describes the layout of flow rules the hypervisor.
 
 ## Openflow 1.3
 
-Table 0:
-
+Table 0, Hypervisor reserved table:
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
+40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
 30 | Forward packet between switches | variable |
 20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | eth-src=x, eth-dst=y | meter(n), eth-src=a, eth-dst=b, goto-tbl(n*k+1)
 10 | 
  0 | New device | 1 | everything | output(controller)
 
-Table n*k+1 to (n+1)*k:
+Table n*k+1 to (n+1)*k-1, tentant tables:
+Priority | Purpose | Amount | Match | Instructions
+---------|---------|--------|-------|-------------
+- | Copy sliced rules from tenant controller | * | * | *
 
-Tables of tenant n tables
+Table (n+1)*k, tenant egress table:
+Priority | Purpose | Amount | Match | Instructions
+---------|---------|--------|-------|-------------
+ 0 | New device | 1 | everything | output(controller)
 
 Meter tables:
 
@@ -136,7 +145,14 @@ This section discusses the actions to perform on packets that are received unsol
 The packets EchoResponse, FeatureResponse, GetConfigResponse, QueueGetConfigResponse are already discussed in the previous section.
 
 ### PacketIn
+Determine if this is caused by an address that needs to be rewritten.
+If table_id=0 & cookie=1 the packet comes from topology discovery.
+  Mark the link as live, reset liveness timer, drop packet.
+If table_id=0 & cookie=2
 
+If Openflow 1.0 determine ethernet addresses, if ethernet addresses in topology discovery range mark link live, etc.
+
+Rewite table_id to slice table.
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
 ### FlowRemoved
@@ -146,6 +162,16 @@ Only forward if the controller Async request filter says the controller wants to
 ### PortStatus
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
+
+## Packets initiated from switch
+All the packets that the switch initiates.
+
+### Session setup and maintenance packets
+
+Periodically sent EchoRequests to each controller.
+
+### Topology discovery PacketOut
+Periodically sent PacketOut packets to every physical port to check if a link (still) is present.
 
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
