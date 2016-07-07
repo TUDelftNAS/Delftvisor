@@ -25,33 +25,39 @@ Table 0, Hypervisor reserved table:
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
 40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
-30 | Forward packet between switches | variable |
-20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | eth-src=x, eth-dst=y | meter(n), eth-src=a, eth-dst=b, goto-tbl(n*k+1)
-10 | 
- 0 | New device | 1 | everything | output(controller)
+30 | Forward inter-virtual-switch traffic | variable, timeout | eth-src=x, eth-dst=y | output(port)
+20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | eth-src=a, eth-dst=b | meter(n), apply(eth-src=x, eth-dst=y), goto-tbl(n*k+1)
+10 | Forward to personal flowtables | variable, timeout | eth-src=x, eth-dst=y | meter(n), goto-tbl(n*k+1)
+ 0 | New device | 1 | * | output(controller)
 
 Table n*k+1 to (n+1)*k-1, tentant tables:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-- | Copy sliced rules from tenant controller | * | * | *
+- | Rewritten flow rules from tenant controller | - | - | -
 
 Table (n+1)*k, tenant egress table:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
- 0 | New device | 1 | everything | output(controller)
+10 | Rewrite ethernet addresses of packets leaving the network | variable, timeout | eth-src=x, eth-dst=y | eth-src=a, eth-dst=b
+ 0 | Error detection rule | 1 | * | output(controller)
 
 Meter tables:
 
 The first n meter tables are reserved where n is the number of slices.
 All these have 1 meter band with action drop when the rate comes above the allowed rate for the slice.
+Each slice receives
 
 ## Openflow 1.0
 The Openflow 1.0 switches
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
+40 | Forward Hypervisor topology discovery packets | 1 | eth-src=x, eth-dst=y | output(controller)
+30 | Forward inter-virtual-switch traffic | variable | eth-src=x, eth-dst=y | output(port)
+20 | Rewrite ethernet addresses of packets entering the network | variable | eth-src=a, eth-dst=b | eth-src=x, eth-dst=y, output(port)
+10 | Rewrite ethernet addresses of packets leaving the network | variable | eth-src=x, eth-dst=y | eth-src=a, eth-dst=b, output(port)
 0 | New device | 1 | everything | output(controller)
 
 # Actions per packet
