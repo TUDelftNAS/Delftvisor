@@ -9,11 +9,30 @@ Each slice wants to be able to use multiple flow tables, group tables, meter tab
 ## Addres space isolation
 Each slice needs to be able to use the full ethernet/ip address space without clashing with another slice.
 
+This is achieved by rewriting the packets ethernet address to an internal representation. This representation should contain the following information:
+
+ - The slice identifier
+ - Real ethernet address identifier
+ - Current target (either flowtable to enter or port to exit)
+
+TODO Use VLAN tags instead? Pop them before forwarding to the table and re-add them after the table. All routing can be done based on the tag. Use VLAN tags because it is both supported by openflow 1.0 and openflow 1.3.
+
+Vlan tag 16 bits:
+ - 3 bit Slice id (8 values)
+ - 1 bit goal (0=flowtable,1=exit)
+ - 4 bit Switch target
+ - 8 bit Port
+
 ## Bandwidth isolation
 Each slice should get a guaranteed slice of the bandwidth.
 
+This is achieved by metering a packet before it is forwarded to a slices flowtables. This hard limits the amount of packets that each slice can insert.
+
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch.
+
+## Openflow 1.0/1.3 hybrid networks
+Allow openflow 1.0 switches ports to be used but always forward to an openflow 1.3 switch for processing.
 
 # Flowtable layout
 The following section describes the layout of flow rules the hypervisor.
@@ -25,8 +44,8 @@ Table 0, Hypervisor reserved table:
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
 40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
-30 | Forward inter-virtual-switch traffic | variable, timeout | eth-src=x, eth-dst=y | output(port)
-20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | eth-src=a, eth-dst=b | meter(n), apply(eth-src=x, eth-dst=y), goto-tbl(n*k+1)
+30 | Forward inter-virtual-switch traffic | # of ports with links * # of switches | in-port=x, vlan-switch-bits=y | output(z)
+20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | in-port=x, eth-src=a, eth-dst=b | meter(n), apply(eth-src=x, eth-dst=y), goto-tbl(n*k+1)
 10 | Forward to personal flowtables | variable, timeout | eth-src=x, eth-dst=y | meter(n), goto-tbl(n*k+1)
  0 | New device | 1 | * | output(controller)
 
