@@ -6,33 +6,61 @@ This section list some the concepts of what needs to be isolated.
 ## Switch features isolation
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
 
-## Addres space isolation
-Each slice needs to be able to use the full ethernet/ip address space without clashing with another slice.
+This is achieved by allocating for each switch an amount of the available resources and rewriting the id's used by that switch. The first flow table is than used to forward packets to the flow tables it is meant to go into.
 
-This is achieved by rewriting the packets ethernet address to an internal representation. This representation should contain the following information:
+For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet sent to table 20. When slice 3 tries to set a flow rule in table 1 it is actually entered in table 10. If any of the flow rules set by table 3 have an goto-table instruction the table number is rewritten, so table 1 becomes 11 and so forth.
 
- - The slice identifier
- - Real ethernet address identifier
- - Current target (either flowtable to enter or port to exit)
-
-TODO Use VLAN tags instead? Pop them before forwarding to the table and re-add them after the table. All routing can be done based on the tag. Use VLAN tags because it is both supported by openflow 1.0 and openflow 1.3.
-
-Vlan tag 16 bits:
- - 3 bit Slice id (8 values)
- - 1 bit goal (0=flowtable,1=exit)
- - 4 bit Switch target
- - 8 bit Port
+Something similar is done with the group tables and meter tables, the group and meter tables don't have any logical ordering so according to the Openflow protocol a controller may try to use every group table in the 32 bit group id space. The Hypervisor has to therefor save a map from the virtual id's the slice uses and the real id's in the switch. When a slice has exhausted the amount of group tables reserved for it sent an error message. The same is used for the meter tables.
 
 ## Bandwidth isolation
 Each slice should get a guaranteed slice of the bandwidth.
 
-This is achieved by metering a packet before it is forwarded to a slices flowtables. This hard limits the amount of packets that each slice can insert.
+This is achieved by metering a packet before it is forwarded to a slice's flow tables. This hard limits the amount of packets that each slice can insert. The maximum rate a slice can use is pre-configured and used throughout the entire network.
+
+More fine-grained bandwidth isolation remains future work. A problem with the current approach is that even if the network has the capability to allow a slice to use more traffic is it not utilized. During configuration an error might be made reserving more traffic over a link than is actually possible. This is currently not detected and would allow slices to influence each others traffic.
+
+## Address space isolation
+Each slice needs to be able to use the full ethernet/ip address space without clashing with another slice.
+
+This is achieved by using VLAN tags. Pop VLAN tags before forwarding to the table and re-add them after the table. All routing can be done based on the tag. Use VLAN tags because it is both supported by Openflow 1.0 and Openflow 1.3.
+
+Openflow allows matching against the 12 VLAN id bits and 3 VLAN priority bits, so 15 bits per tag. Openflow 1.0 regretfully only supports matching and adding/removing of 1 VLAN tag.
+
+VLAN tag 15 bits:
+ - 4 bit Slice id (16 values)
+ - 1 bit goal (0=flowtable,1=exit)
+ - 5 bit Switch target (32 values)
+ - 5 bit Port target (32 values)
+
+To successfully rewrite the actions the following needs to be achieved:
+
+If the network only consists of Openflow 1.3 switches an alternative scheme might be used that uses 2 VLAN tags, the first routing the packets to the switch and the second telling the switch what to do with the packet once it gets there. This allows more slices and each slice to have more switches and ports. For example the following layout might be chosen:
+
+First VLAN tag 15 bits:
+ - 5 bit Slice id (32 values)
+ - 1 bit what-vlan-tag (always 0, indicating this is the first VLAN tag)
+ - 9 bit Switch target (512 values)
+
+Second VLAN tag 15 bits:
+ - 5 bit Slice id (32 values)
+ - 1 bit what-vlan-tag (always 1, indicating this is the second VLAN tag)
+ - 1 bit goal (0=flowtable,1=exit)
+ - 8 bit Port target (256 values)
+
+Currently there is no plan to implement this, it is meant as an example to circumvent the limitations imposed by the chosen concept. But if you drop support for Openflow 1.0 you might as well use MPLS tags to get more available bits.
 
 ## Topology abstraction
-Each virtual switch doesn't need to correspond 1:1 to a physical switch.
+Each virtual switch doesn't need to correspond 1:1 to a physical switch. A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
+
+With topology abstraction is there a difference between virtual and physical switches. Each virtual switch consists of a combination of physical ports that might not be on the same physical switch.
+
+This introduces some limitations:
+ - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch.
+
+If a physical port is in more than one virtual switches a host cannot be attached to that port, only a link to another switch that is connected to the Hypervisor.
 
 ## Openflow 1.0/1.3 hybrid networks
-Allow openflow 1.0 switches ports to be used but always forward to an openflow 1.3 switch for processing.
+Every virtual switch in the settings has an option to expose Openflow 1.0 or 1.3 to the controller. If the versions overlap between the physical switch and virtual switch use the isolation mechanisms described above. If Openflow 1.3 is to be simulated on Openflow 1.0 find a nearby Openflow 1.3 switch and forward the packets for processing there. If Openflow 1.0 is to be simulated on Openflow 1.3 reserve 1 flow table instead of a set of flow tables.
 
 # Flowtable layout
 The following section describes the layout of flow rules the hypervisor.
@@ -200,6 +228,8 @@ Periodically sent EchoRequests to each controller.
 
 ### Topology discovery PacketOut
 Periodically sent PacketOut packets to every physical port to check if a link (still) is present.
+
+The topology discovery packets are LLDP packets sent in a reserved slice with id 0.
 
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
