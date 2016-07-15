@@ -1,7 +1,10 @@
-This document should summarize the design decisions taken when building the Hypervisor.
+This document should summarize the design decisions taken when building the Openflow Hypervisor. The original goal was to design a Hypervisor that would expose Openflow 1.3 to it's tenants while the network below could consist of Openflow 1.0 and Openflow 1.3 switches.
 
 # Isolation requirements
-This section list some the concepts of what needs to be isolated.
+The Hypervisor needs to prevent tenants from interfering with each other. This section list the requirements of what needs to be isolated and how to do it.
+
+## Openflow 1.0/1.3 hybrid networks
+Every virtual switch in the settings has an option to expose Openflow 1.0 or 1.3 to the controller. If the versions overlap between the physical switch and virtual switch use the isolation mechanisms described above. If Openflow 1.3 is to be simulated on Openflow 1.0 find a nearby Openflow 1.3 switch and forward the packets for processing there. If Openflow 1.0 is to be simulated on Openflow 1.3 reserve 1 flow table instead of a set of flow tables.
 
 ## Switch features isolation
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
@@ -58,9 +61,6 @@ This introduces some limitations:
  - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch.
 
 If a physical port is in more than one virtual switches a host cannot be attached to that port, only a link to another switch that is connected to the Hypervisor.
-
-## Openflow 1.0/1.3 hybrid networks
-Every virtual switch in the settings has an option to expose Openflow 1.0 or 1.3 to the controller. If the versions overlap between the physical switch and virtual switch use the isolation mechanisms described above. If Openflow 1.3 is to be simulated on Openflow 1.0 find a nearby Openflow 1.3 switch and forward the packets for processing there. If Openflow 1.0 is to be simulated on Openflow 1.3 reserve 1 flow table instead of a set of flow tables.
 
 # Flowtable layout
 The following section describes the layout of flow rules the hypervisor.
