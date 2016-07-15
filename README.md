@@ -12,10 +12,10 @@ This project is an openflow hypervisor that works with openflow 1.3 leveraging t
 ## Building
 This project uses cmake. Running the following commands ran from this directory produces an executable:
 
-  mkdir build/
-  cd build/
-  cmake ..
-  make
+    mkdir build/
+    cd build/
+    cmake ..
+    make
 
 ## Running
 The Hypervisor uses a configuration file to setup all virtual networks. This configuration file is passed as a command line argument.
