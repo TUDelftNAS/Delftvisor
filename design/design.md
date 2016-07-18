@@ -1,10 +1,7 @@
-This document should summarize the design decisions taken when building the Openflow Hypervisor. The original goal was to design a Hypervisor that would expose Openflow 1.3 to it's tenants while the network below could consist of Openflow 1.0 and Openflow 1.3 switches.
+This document should summarize the design decisions taken when building the Openflow Hypervisor. The original goal was to design a Hypervisor that would expose Openflow 1.3 to it's tenants while the network below could consist of Openflow 1.0 and Openflow 1.3 switches. During design it became apparent that simulating Openflow 1.3 on Openflow 1.0 switches is not feasible. The proposed solution was to re-route packets from Openflow 1.0 switches to Openflow 1.3 switches and handle the packets there. Unfortunately doesn't Openflow 1.0 support multiple VLAN tags imposing unacceptable constraints on the Hypervisor. Therefor is the design below for an Openflow 1.3 Hypervisor.
 
 # Isolation requirements
 The Hypervisor needs to prevent tenants from interfering with each other. This section list the requirements of what needs to be isolated and how to do it.
-
-## Openflow 1.0/1.3 hybrid networks
-Every virtual switch in the settings has an option to expose Openflow 1.0 or 1.3 to the controller. If the versions overlap between the physical switch and virtual switch use the isolation mechanisms described above. If Openflow 1.3 is to be simulated on Openflow 1.0 find a nearby Openflow 1.3 switch and forward the packets for processing there. If Openflow 1.0 is to be simulated on Openflow 1.3 reserve 1 flow table instead of a set of flow tables.
 
 ## Switch features isolation
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
@@ -23,11 +20,22 @@ This is achieved by metering a packet before it is forwarded to a slice's flow t
 More fine-grained bandwidth isolation remains future work. A problem with the current approach is that even if the network has the capability to allow a slice to use more traffic is it not utilized. During configuration an error might be made reserving more traffic over a link than is actually possible. This is currently not detected and would allow slices to influence each others traffic.
 
 ## Address space isolation
-Each slice needs to be able to use the full ethernet/ip address space without clashing with another slice.
+Each slice needs to be able to use the full Ethernet/IP address space without clashing with another slice.
 
-This is achieved by using VLAN tags. Pop VLAN tags before forwarding to the table and re-add them after the table. All routing can be done based on the tag. Use VLAN tags because it is both supported by Openflow 1.0 and Openflow 1.3.
+OpenVirtex, an Openflow 1.0 Hypervisor, achieves this by rewriting the source and destination addresses at the edge of the network to an internal representation and rewriting it again before the packet is output again at the network edge. With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) which is why a different concept was chosen.
 
-Openflow allows matching against the 12 VLAN id bits and 3 VLAN priority bits, so 15 bits per tag. Openflow 1.0 regretfully only supports matching and adding/removing of 1 VLAN tag.
+PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 24 bits that support masking. Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing.
+
+PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. These would be split up using:
+ - 1 bit goal (0=flowtable,1=output-port), use the entire I-SID field for this so it can be changed in one set-field action
+ - 32 bit switch id
+ - 32 bit port id
+ - 32 bit slice id
+
+### Vlan tagging
+This section describes the original concept with VLAN tagging. In this concept 1 VLAN tag was added to each packet which contained all the information the Hypervisor needed to handle the packet. Unfortunately does Openflow 1.0 only allow VLAN tags and not MPLS tags or PBB tags, but even worse it only allows tagging a packet with 1 VLAN tag. This leads to the following distribution of bits:
+
+Openflow allows matching against the 12 VLAN id bits and 3 VLAN priority bits, so 15 bits per tag.
 
 VLAN tag 15 bits:
  - 4 bit Slice id (16 values)
@@ -35,9 +43,10 @@ VLAN tag 15 bits:
  - 5 bit Switch target (32 values)
  - 5 bit Port target (32 values)
 
-To successfully rewrite the actions the following needs to be achieved:
+Which is not enough slices, switches and ports. No formal requirement was set for the amount of slices, switches and ports but any data centre is already bigger than this which is why this concept was abandoned.
 
-If the network only consists of Openflow 1.3 switches an alternative scheme might be used that uses 2 VLAN tags, the first routing the packets to the switch and the second telling the switch what to do with the packet once it gets there. This allows more slices and each slice to have more switches and ports. For example the following layout might be chosen:
+### Double VLAN tagging
+This section describes a concept that uses multiple VLAN tags, this concept was infeasible because Openflow 1.0 only supports 1 VLAN tag.
 
 First VLAN tag 15 bits:
  - 5 bit Slice id (32 values)
@@ -50,62 +59,67 @@ Second VLAN tag 15 bits:
  - 1 bit goal (0=flowtable,1=exit)
  - 8 bit Port target (256 values)
 
-Currently there is no plan to implement this, it is meant as an example to circumvent the limitations imposed by the chosen concept. But if you drop support for Openflow 1.0 you might as well use MPLS tags to get more available bits.
-
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch. A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
 
-With topology abstraction is there a difference between virtual and physical switches. Each virtual switch consists of a combination of physical ports that might not be on the same physical switch.
-
-This introduces some limitations:
+Topology abstraction is allowed by defining each virtual switch as a combination of physical ports, which may be on other switches. Constraints are imposed such as:
+ - Only ports on a switch-switch connection may be shared between multiple virtual switches, if no switch-switch connection is detected the virtual ports stay down.
+ - If a virtual switch has a port on a switch-switch connection it also has to have a port in that slice on the other side of the connection, if that link is not found the virtual port should stay down
  - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch.
 
-If a physical port is in more than one virtual switches a host cannot be attached to that port, only a link to another switch that is connected to the Hypervisor.
+All packets are handled by tenant rules on the switch they arrive in. If a packet needs to be output on a port on another switch the output action is rewritten to add a BPP tag containing the switch/port target and output on a switch-switch port with a route to the target. In the first flowtable packets that need to be forwarded are detected and appropriately forwarded. If the packet needs to be outputted at this switch is the PBB tag removed and the packet outputted.
+
+Future work might include optimizing this method for the group table. If a rule generates a lot of copies of the packet it might be advantageous to apply the group table at a later switch instead of immediately.
 
 # Flowtable layout
-The following section describes the layout of flow rules the hypervisor.
+The following section describes the layout of flow rules the Hypervisor.
 
-## Openflow 1.3
-
-Table 0, Hypervisor reserved table:
+## Table 0, Hypervisor reserved table:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
-30 | Forward inter-virtual-switch traffic | # of ports with links * # of switches | in-port=x, vlan-switch-bits=y | output(z)
-20 | Rewrite addresses at network edge, forward to personal flowtables | variable, timeout | in-port=x, eth-src=a, eth-dst=b | meter(n), apply(eth-src=x, eth-dst=y), goto-tbl(n*k+1)
-10 | Forward to personal flowtables | variable, timeout | eth-src=x, eth-dst=y | meter(n), goto-tbl(n*k+1)
- 0 | New device | 1 | * | output(controller)
+70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
+60 | Forward inter-virtual-switch traffic | # of ports with links \* # of switches | in-port=x, pbb-switch-bits=y | output(z)
+50 | Output already processed packet over port with link | # of ports with link \* # of ports with link | in-port=x (port with link), pbb-goal-bit=0, pbb-switch-bits=a, pbb-port-bits=b | pop-pbb, output(y) (port without link)
+40 | Output already processed packet over port without link | # of ports with link \* # of ports without link | in-port=x (port with link), pbb-goal-bit=1, pbb-switch-bits=a, pbb-port-bits=b | pbb-goal-bit=0, output(y) (port without link)
+30 | Forward tagged packets to flowtable | # of ports with links \* # slices | pbb-slice-bits=x | meter(n), goto-tbl(n\*k+1)
+20 | Detect erroneous packets on switch links, cookie=2 | # of ports with link | in-port=x | output(controller)
+10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), goto-tbl(n\*k+1)
+ 0 | Error detection rule, cookie=3 | 1 | * | output(controller)
 
-Table n*k+1 to (n+1)*k-1, tentant tables:
+## Table n\*k+1 to (n+1)\*k-1, tenant tables:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
 - | Rewritten flow rules from tenant controller | - | - | -
+0 | Send packets that fall through to egress table | 1 | * | goto-tbl(egress)
 
-Table (n+1)*k, tenant egress table:
+How to rewrite flow rules:
+```
+If apply-action instruction:
+  If an output action and output over switch-switch link:
+    Replace with push-pbb, set-field(eth-dst,eth-src,pbb-isid), output(new-port), pop-pbb
+    This might be optimized by detection if the tags really needs to be popped
+  If an output action and output over host port:
+    Replace with output(new-port)
+If write-action instruction:
+  Rewrite output port # to physical port #
+If instruction list contains goto-tbl:
+  Rewrite goto-tbl number
+If instruction list doesn't contain goto-tbl
+  Add goto-tbl to egress table
+```
+
+## Table last, egress table:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-10 | Rewrite ethernet addresses of packets leaving the network | variable, timeout | eth-src=x, eth-dst=y | eth-src=a, eth-dst=b
+10 | Add PBB header | 1 | - | push-pbb
  0 | Error detection rule | 1 | * | output(controller)
 
-Meter tables:
-
+## Meter tables:
 The first n meter tables are reserved where n is the number of slices.
 All these have 1 meter band with action drop when the rate comes above the allowed rate for the slice.
-Each slice receives
-
-## Openflow 1.0
-The Openflow 1.0 switches
-
-Priority | Purpose | Amount | Match | Instructions
----------|---------|--------|-------|-------------
-40 | Forward Hypervisor topology discovery packets | 1 | eth-src=x, eth-dst=y | output(controller)
-30 | Forward inter-virtual-switch traffic | variable | eth-src=x, eth-dst=y | output(port)
-20 | Rewrite ethernet addresses of packets entering the network | variable | eth-src=a, eth-dst=b | eth-src=x, eth-dst=y, output(port)
-10 | Rewrite ethernet addresses of packets leaving the network | variable | eth-src=x, eth-dst=y | eth-src=a, eth-dst=b, output(port)
-0 | New device | 1 | everything | output(controller)
 
 # Actions per packet
 This section describes per different packet what actions need to be taken on the packet.
@@ -204,9 +218,8 @@ The packets EchoResponse, FeatureResponse, GetConfigResponse, QueueGetConfigResp
 Determine if this is caused by an address that needs to be rewritten.
 If table_id=0 & cookie=1 the packet comes from topology discovery.
   Mark the link as live, reset liveness timer, drop packet.
-If table_id=0 & cookie=2
-
-If Openflow 1.0 determine ethernet addresses, if ethernet addresses in topology discovery range mark link live, etc.
+Else
+  Log packet, show error
 
 Rewite table_id to slice table.
 Only forward if the controller Async request filter says the controller wants to receive these packets.
