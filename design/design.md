@@ -92,7 +92,6 @@ Priority | Purpose | Amount | Match | Instructions
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
 - | Rewritten flow rules from tenant controller | - | - | -
-0 | Send packets that fall through to egress table | 1 | * | goto-tbl(egress)
 
 How to rewrite flow rules:
 ```
@@ -103,19 +102,17 @@ If apply-action instruction:
   If an output action and output over host port:
     Replace with output(new-port)
 If write-action instruction:
-  Rewrite output port # to physical port #
+  Rewrite output action to group action
 If instruction list contains goto-tbl:
   Rewrite goto-tbl number
-If instruction list doesn't contain goto-tbl
-  Add goto-tbl to egress table
 ```
 
-## Table last, egress table:
+## Group tables
 
-Priority | Purpose | Amount | Match | Instructions
----------|---------|--------|-------|-------------
-10 | Add PBB header | 1 | - | push-pbb
- 0 | Error detection rule | 1 | * | output(controller)
+Purpose | Id | Amount | Mode | Buckets
+--------+----+--------+------+--------
+Simulate FLOOD output action | - | # of slices | All | Bucket(Output(x)), etc
+Add outgoing VLAN tag | Copy tag bit structure | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | Bucket(push-pbb, pbb-goal-bit=0, pbb-switch-bits=a, pbb-port-bits=b, output(c))
 
 ## Meter tables:
 The first n meter tables are reserved where n is the number of slices.
