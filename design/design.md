@@ -110,7 +110,7 @@ If instruction list contains goto-tbl:
 ## Group tables
 
 Purpose | Id | Amount | Mode | Buckets
---------+----+--------+------+--------
+--------|----|--------|------|--------
 Simulate FLOOD output action | - | # of slices | All | Bucket(Output(x)), etc
 Add outgoing VLAN tag | Copy tag bit structure | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | Bucket(push-pbb, pbb-goal-bit=0, pbb-switch-bits=a, pbb-port-bits=b, output(c))
 
