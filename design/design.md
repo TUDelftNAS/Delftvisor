@@ -15,7 +15,7 @@ Something similar is done with the group tables and meter tables, the group and 
 ## Bandwidth isolation
 Each slice should get a guaranteed slice of the bandwidth.
 
-This is achieved by metering a packet before it is forwarded to a slice's flow tables. This hard limits the amount of packets that each slice can insert. The maximum rate a slice can use is pre-configured and used throughout the entire network.
+This is achieved by metering a packet before it is forwarded to a slice's flow tables. This hard limits the amount of packets that each slice can process. The maximum rate a slice can use is pre-configured and used throughout the entire network.
 
 More fine-grained bandwidth isolation remains future work. A problem with the current approach is that even if the network has the capability to allow a slice to use more traffic is it not utilized. During configuration an error might be made reserving more traffic over a link than is actually possible. This is currently not detected and would allow slices to influence each others traffic.
 
@@ -24,40 +24,14 @@ Each slice needs to be able to use the full Ethernet/IP address space without cl
 
 OpenVirtex, an Openflow 1.0 Hypervisor, achieves this by rewriting the source and destination addresses at the edge of the network to an internal representation and rewriting it again before the packet is output again at the network edge. With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) which is why a different concept was chosen.
 
-PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 24 bits that support masking. Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing.
+PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 120 bits that support masking. Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing and VLAN tags only allow for 15 bits of maskable information which wasn't enough to contain the routing information for a sizable network.
 
-PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. These would be split up using:
- - 1 bit goal (0=flowtable,1=output-port), use the entire I-SID field for this so it can be changed in one set-field action
- - 32 bit switch id
- - 32 bit port id
- - 32 bit slice id
+The output action need to be rewritten to add the tag if necessary. For this purpose is reactively a group table entry created with type indirect for each slice/switch/port combination. This entry adds the PBB tag, sets the values and outputs the packet over the port it needs to go to. In an apply action instruction the output action can just be changed to the group action without encountering problems but the write-action instruction needs some extra logic. The action set of a packet can be overwritten by in other flow tables, per type of action only one is allowed in the action set. If an action set contains an group and an output action only the group action is executed. The described rewrite would change an output action to a group action, this means it might overwrite a group action set by the tenant in an earlier table. To solve this problem a bit in the metadata field is used. When a packet has a group action in the action set the bit is set to 1, when it is removed the bit is set to 0. Every flow rule that has an output action in the write-action instruction that needs to be rewritten to a group action is duplicated, a version with the output action rewritten that matches on the metadata bit being 1 and a version with the output action removed that matches on the metadata bit being 0. This adds the constraints to the tenant controller that they cannot match/write on the left-most bit of the metadata field.
 
-### Vlan tagging
-This section describes the original concept with VLAN tagging. In this concept 1 VLAN tag was added to each packet which contained all the information the Hypervisor needed to handle the packet. Unfortunately does Openflow 1.0 only allow VLAN tags and not MPLS tags or PBB tags, but even worse it only allows tagging a packet with 1 VLAN tag. This leads to the following distribution of bits:
-
-Openflow allows matching against the 12 VLAN id bits and 3 VLAN priority bits, so 15 bits per tag.
-
-VLAN tag 15 bits:
- - 4 bit Slice id (16 values)
- - 1 bit goal (0=flowtable,1=exit)
- - 5 bit Switch target (32 values)
- - 5 bit Port target (32 values)
-
-Which is not enough slices, switches and ports. No formal requirement was set for the amount of slices, switches and ports but any data centre is already bigger than this which is why this concept was abandoned.
-
-### Double VLAN tagging
-This section describes a concept that uses multiple VLAN tags, this concept was infeasible because Openflow 1.0 only supports 1 VLAN tag.
-
-First VLAN tag 15 bits:
- - 5 bit Slice id (32 values)
- - 1 bit what-vlan-tag (always 0, indicating this is the first VLAN tag)
- - 9 bit Switch target (512 values)
-
-Second VLAN tag 15 bits:
- - 5 bit Slice id (32 values)
- - 1 bit what-vlan-tag (always 1, indicating this is the second VLAN tag)
- - 1 bit goal (0=flowtable,1=exit)
- - 8 bit Port target (256 values)
+PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit. Since we also need to reserve some group id's for the tenants only 31 bits are used. These would be split up using:
+ - 10 bit slice id
+ - 11 bit switch id
+ - 10 bit port id
 
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch. A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
@@ -78,16 +52,15 @@ The following section describes the layout of flow rules the Hypervisor.
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
-60 | Forward inter-virtual-switch traffic | # of ports with links \* # of switches | in-port=x, pbb-switch-bits=y | output(z)
-50 | Output already processed packet over port with link | # of ports with link \* # of ports with link | in-port=x (port with link), pbb-goal-bit=0, pbb-switch-bits=a, pbb-port-bits=b | pop-pbb, output(y) (port without link)
-40 | Output already processed packet over port without link | # of ports with link \* # of ports without link | in-port=x (port with link), pbb-goal-bit=1, pbb-switch-bits=a, pbb-port-bits=b | pbb-goal-bit=0, output(y) (port without link)
-30 | Forward tagged packets to flowtable | # of ports with links \* # slices | pbb-slice-bits=x | meter(n), goto-tbl(n\*k+1)
+60 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
+50 | Forward inter-virtual-switch traffic | # of ports with links \* (# of switches-1) | in-port=x, pbb-switch-bits=y | output(z)
+40 | Output already processed packet over port with link | # of slices \* # of ports with link \* # of ports with link | in-port=x, pbb-slice-bits=y pbb-switch-bits=z, pbb-port-bits=w | meter(n), output(a)
+30 | Output already processed packet over port without link | # of ports with link \* # of ports without link | in-port=x, pbb-switch-bits=y, pbb-port-bits=z | pop-pbb, output(a)
 20 | Detect erroneous packets on switch links, cookie=2 | # of ports with link | in-port=x | output(controller)
-10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), goto-tbl(n\*k+1)
+10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), write-metadata(0&1), goto-tbl(n\*k+1)
  0 | Error detection rule, cookie=3 | 1 | * | output(controller)
 
-## Table n\*k+1 to (n+1)\*k-1, tenant tables:
+## Table n | n>0, tenant tables:
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
@@ -95,24 +68,57 @@ Priority | Purpose | Amount | Match | Instructions
 
 How to rewrite flow rules:
 ```
-If apply-action instruction:
-  If an output action and output over switch-switch link:
-    Replace with push-pbb, set-field(eth-dst,eth-src,pbb-isid), output(new-port), pop-pbb
-    This might be optimized by detection if the tags really needs to be popped
-  If an output action and output over host port:
-    Replace with output(new-port)
-If write-action instruction:
-  Rewrite output action to group action
-If instruction list contains goto-tbl:
-  Rewrite goto-tbl number
+Scan instruction list:
+  If instruction is goto-tbl:
+    Rewrite goto-tbl number
+  If instruction is apply-action:
+    Scan action list:
+      If action is group:
+        Rewrite group number
+      If action is output:
+        If output to port on this switch:
+          Rewrite output port number
+        If output over FLOOD port:
+          Replace with group action to slice flood group
+        If output to port not on this switch:
+          Replace with group action that adds correct tag and output over correct link
+  If instruction is write-action:
+    Scan action list:
+      If action is group:
+        Rewrite group number
+        Add instruction write-metadata with data 1 and mask 1
+      If action is output:
+        If output to port on this switch:
+          Rewrite output port number
+        If output over FLOOD port:
+          Replace with group action to slice flood group
+          Add matching on metadata 1 and mask 1
+          Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
+        If output to port not on this switch:
+          Replace with group action that adds correct tag and output over correct link
+          Add matching on metadata 1 and mask 1
+          Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
+  If instruction is clear-actions:
+    Add write-metadata instruction with metadata 0 and mask 1
+  If instruction is write-metadata:
+    If left-most bit in mask is set:
+      Drop rule, Return error
+    Else:
+      Shift mask and metadata 1 bit to the left
+Scan match fields:
+  If match on metadata:
+    If left-most bit in mask is set:
+      Drop rule, return error
+    Else:
+      Shift mask and metadata 1 bit to the left
 ```
 
 ## Group tables
 
 Purpose | Id | Amount | Mode | Buckets
 --------|----|--------|------|--------
-Simulate FLOOD output action | - | # of slices | All | Bucket(Output(x)), etc
-Add outgoing VLAN tag | Copy tag bit structure | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | Bucket(push-pbb, pbb-goal-bit=0, pbb-switch-bits=a, pbb-port-bits=b, output(c))
+Add outgoing PBB tag | Concatenation of slice-bits, switch-bits, port-bits | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
+Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
 
 ## Meter tables:
 The first n meter tables are reserved where n is the number of slices.
