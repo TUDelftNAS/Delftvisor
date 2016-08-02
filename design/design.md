@@ -52,7 +52,8 @@ The following section describes the layout of flow rules the Hypervisor.
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-60 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
+70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
+60 | Forward packet-out from tenant to personal flowtables | # of slices | in-port=controller, pbb-slice-bits=x | meter(n), write-metadata(0&1), pop-pbb, goto-tbl(n\*k+1)
 50 | Forward inter-virtual-switch traffic | # of ports with links \* (# of switches-1) | in-port=x, pbb-switch-bits=y | output(z)
 40 | Output already processed packet over port with link | # of slices \* # of ports with link \* # of ports with link | in-port=x, pbb-slice-bits=y pbb-switch-bits=z, pbb-port-bits=w | meter(n), output(a)
 30 | Output already processed packet over port without link | # of ports with link \* # of ports without link | in-port=x, pbb-switch-bits=y, pbb-port-bits=z | pop-pbb, output(a)
@@ -66,7 +67,75 @@ Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
 - | Rewritten flow rules from tenant controller | - | - | -
 
-How to rewrite flow rules:
+## Group tables
+
+Purpose | Id | Amount | Mode | Buckets
+--------|----|--------|------|--------
+Add outgoing PBB tag | Concatenation of slice-bits, switch-bits, port-bits | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
+Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
+
+## Meter tables:
+The first n meter tables are reserved where n is the number of slices.
+All these have 1 meter band with action drop when the rate comes above the allowed rate for the slice.
+
+# Actions per packet
+This section describes per different packet what actions need to be taken on the packet.
+
+## Packets from controller
+This section discusses what to do with packets coming from the controller to the switch.
+
+For every packet that get's forward the xid in the openflow header needs to be rewritten to an id unique for that physical switch.
+The response from the physical switch, if it get's forwarded back to the controller, needs to be rewritten again.
+
+### Hello
+Sent back an Hello message indicating the Hypervisor only support openflow 1.3.
+
+### EchoRequest
+Sent an copied EchoRequest to all physical switches that have ports from this virtual switch.
+When all their EchoResponses are at the Hypervisor sent a EchoResponse back to the controller.
+
+If any response comes back with an error forward that error, if an response doesn't come back also don't respond.
+
+### BarrierRequest
+See EchoRequest, do the same thing.
+
+### Experimenter
+Return an error with type BadRequest and code BadExperimenterType.
+
+### FeatureRequest
+Return an FeatureReply with:
+ - datapath_id  = Virtual switch datapath id
+ - n_buffers    = minimum n_buffers of underlying physical switches
+ - n_tables     = Amount of tables reserved for this slice
+ - auxiliary_id = 0, indicates this is the main connection
+ - capabilities = 0, Statistics are currently not in the scope of this project. The IP_REASM should be set if all underlying switches implement it.
+
+### GetConfigRequest
+Send a GetConfigResponse with the fragmentations_flags & and the miss_send_len minimum.
+
+### SetConfig
+Drop and do nothing. Since this affects all packet handling on the switch which may be used by multiple slices is it not sensible to actually pass this on.
+
+### PacketOut
+Pick a physical switch this is going to be sent to, if there is an output action sent it to the switch that has the relevant port on it. If there is no output action pick a random switch, if there are multiple just use the first one.
+
+The fields to be rewritten are the buffer_id, in_port and the actions (output, group, meter). The actions are to be rewritten as if they are in an apply-action instruction.
+
+If the in-port=controller and there is an output action to the table surround the output to table action with a push-tag, set-field and pop-tag actions. This is necessary so the Hypervisor reserved table can figure out what slice this packet belongs to.
+
+Sent the packet to the switch.
+
+Remove the buffer_id rewrite from the virtual switch.
+
+### FlowMod
+
+If table_id=OFPTT_ALL create clone messages for each table assigned to this slice.
+If command=OFPC_DELETE* rewrite the out_port field and out_group field
+
+The flags field can be directly forwarded.
+TODO Should the cookie field be rewritten?
+
+TODO Meter instruction/action rewrite
 ```
 Scan instruction list:
   If instruction is goto-tbl:
@@ -113,75 +182,6 @@ Scan match fields:
       Shift mask and metadata 1 bit to the left
 ```
 
-## Group tables
-
-Purpose | Id | Amount | Mode | Buckets
---------|----|--------|------|--------
-Add outgoing PBB tag | Concatenation of slice-bits, switch-bits, port-bits | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
-Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
-
-## Meter tables:
-The first n meter tables are reserved where n is the number of slices.
-All these have 1 meter band with action drop when the rate comes above the allowed rate for the slice.
-
-# Actions per packet
-This section describes per different packet what actions need to be taken on the packet.
-
-## Packets from controller
-This section discusses what to do with packets coming from the controller to the switch.
-
-For every packet that get's forward the xid in the openflow header needs to be rewritten to an id unique for that physical switch.
-The response from the physical switch, if it get's forwarded back to the controller, needs to be rewritten again.
-
-### Hello
-Sent back an Hello message indicating the Hypervisor only support openflow 1.3.
-
-### EchoRequest
-Sent an copied EchoRequest to all physical switches that have ports from this virtual switch.
-When all their EchoResponses are at the Hypervisor sent a EchoResponse back to the controller.
-
-### BarrierRequest
-See EchoRequest, do the same thing.
-
-### Experimenter
-Return an error with type BadRequest and code BadExperimenterType.
-
-### FeatureRequest
-Return an FeatureReply with:
- - datapath_id   = Virtual switch datapath id
- - n_buffers    = minimum n_buffers of underlying physical switches
- - n_tables     = Amount of tables reserved for this slice
- - auxiliary_id = 0
- - capabilities = FLOW_STATS | TABLE_STATS | GROUP_STATS | (IP_REASM if all underlying switches support it)
-
-Cannot provide PORT_STATS since other slices can sent packets through the same port.
-
-TODO Maybe can provide QUEUE_STATS?
-
-### GetConfigRequest
-TODO Don't know what to do with this, probably just not support it or expose the most restrictive policy supported by all physical switches below this one.
-
-### SetConfig
-TODO Probably sent an error since this would affect all packets going through the switch instead of 1 slice.
-
-### PacketOut
-Scan the action list, if there is an output() action rewrite port to physical port and figure out physical switch.
-If there is a group action sent to closest physical openflow 1.3 switch.
-
-If packet is sent to network edge port don't rewrite, otherwise add ethernet addresses to slice rewrite list and rewrite ethernet addresses in the packet.
-
-TODO Are the actions filters enough?
-
-Sent packet to physical switch.
-
-### FlowMod
-
-If table_id=OFPTT_ALL create clone messages for each table assigned to this slice.
-If command=OFPC_DELETE* rewrite the out_port field and out_group field
-
-The flags field can be directly forwarded.
-TODO Should the cookie field be rewritten?
-
 ### GroupMod
 
 ### PortMod
@@ -200,7 +200,9 @@ The packet can then be forwarded.
 TODO simulating OFMP_ALL is slow, dealing with the response/failure messages of that seems difficult and the standard doesn't say you need to use adjacent meter id's.
 
 ### MultipartRequest
-TODO Just don't support it, openvswitch doesn't support it either.
+Return a Bad Request error with type Bad Multipart. This indicates that this type of multipart message is not supported.
+
+Providing statistics is currently out of scope for this project. Statistic messages could be rewritten, passed to the switches and aggregated to provide this functionality. Port statistics can be tricky since on shared links the traffic caused by each slices would need to be isolated. This could be done by remembering which flows cause packets to be forwarded to a port and query their statistics instead and aggregate those.
 
 ### QueueGetConfigRequest
 
@@ -250,6 +252,40 @@ The topology discovery packets are LLDP packets sent in a reserved slice with id
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
 
+## Per slice
+
+## Per virtual switch
+ - datapath_id (made up, unique)
+ - Map of actual packet buffers to virtual buffers and vice-versa, (dpid,buffer_no) <-> virtual_buffer_no
+
+## Per switch
+ - n_buffers
+ - n_tables
+ - capabilities (only IP_REASM is currently used)
+ - fragmentation_flags (ask via GetConfig)
+ - miss_send_len (ask via GetConfig)
+ - For all other switches, on what port to route packets
+
 ## Async request filter
 The asynchronous request filter saves per controller what unsollicited messages they want to receive.
 
+# Events to handle
+This section discusses some event that may happen that aren't directly openflow messages.
+
+## New switch connection
+ - Sent port-up messages for all virtual ports on this switch
+ - Rerun routing algorithm, update all routes
+
+## Lost switch connection
+ - Sent port-down messages for all virtual ports on this switch
+ - Rerun routing algorithm, update all routes
+
+## New controller connection
+
+## Lost controller connection
+
+## New link found via topology discovery
+
+## Link lost detected via topology discovery
+ - Sent port-down messages for all virtual ports using either link port
+ - Rerun routing algorithm, update all routes
