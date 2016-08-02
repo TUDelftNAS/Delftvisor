@@ -28,10 +28,10 @@ PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it a
 
 The output action need to be rewritten to add the tag if necessary. For this purpose is reactively a group table entry created with type indirect for each slice/switch/port combination. This entry adds the PBB tag, sets the values and outputs the packet over the port it needs to go to. In an apply action instruction the output action can just be changed to the group action without encountering problems but the write-action instruction needs some extra logic. The action set of a packet can be overwritten by in other flow tables, per type of action only one is allowed in the action set. If an action set contains an group and an output action only the group action is executed. The described rewrite would change an output action to a group action, this means it might overwrite a group action set by the tenant in an earlier table. To solve this problem a bit in the metadata field is used. When a packet has a group action in the action set the bit is set to 1, when it is removed the bit is set to 0. Every flow rule that has an output action in the write-action instruction that needs to be rewritten to a group action is duplicated, a version with the output action rewritten that matches on the metadata bit being 1 and a version with the output action removed that matches on the metadata bit being 0. This adds the constraints to the tenant controller that they cannot match/write on the left-most bit of the metadata field.
 
-PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit. Since we also need to reserve some group id's for the tenants only 31 bits are used. These would be split up using:
- - 10 bit slice id
- - 11 bit switch id
- - 10 bit port id
+PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit. Since we also need to reserve some group id's for the tenants only 31 bits are used. Another problem comes with the amount of flow tables, the flow table id is 8 bits and per slice we need at least 1 flow table limiting the number of slices to a maximum of 254 (8 bits). These would be split up using:
+ - 8 bit slice id
+ - 12 bit switch id
+ - 11 bit port id
 
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch. A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
@@ -127,6 +127,8 @@ Sent the packet to the switch.
 
 Remove the buffer_id rewrite from the virtual switch.
 
+TODO Use VLAN tag instead of PBB tag since it's smaller?
+
 ### FlowMod
 
 If table_id=OFPTT_ALL create clone messages for each table assigned to this slice.
@@ -135,22 +137,29 @@ If command=OFPC_DELETE* rewrite the out_port field and out_group field
 The flags field can be directly forwarded.
 TODO Should the cookie field be rewritten?
 
-TODO Meter instruction/action rewrite
+The following rewrite algorithm should be used on apply-action action lists:
+```
+Scan action list:
+  If action is group:
+    Rewrite group number
+  If action is output:
+    If output to port on this switch:
+      Rewrite output port number
+    If output over FLOOD port:
+      Replace with group action to slice flood group
+    If output to port not on this switch:
+      Replace with group action that adds correct tag and output over correct link
+```
+
+The following algorithm should be used on flowmod messages:
 ```
 Scan instruction list:
   If instruction is goto-tbl:
     Rewrite goto-tbl number
+  If instruction is meter:
+    Rewrite meter number
   If instruction is apply-action:
-    Scan action list:
-      If action is group:
-        Rewrite group number
-      If action is output:
-        If output to port on this switch:
-          Rewrite output port number
-        If output over FLOOD port:
-          Replace with group action to slice flood group
-        If output to port not on this switch:
-          Replace with group action that adds correct tag and output over correct link
+    Use apply-action list algorithm
   If instruction is write-action:
     Scan action list:
       If action is group:
@@ -183,13 +192,11 @@ Scan match fields:
 ```
 
 ### GroupMod
+Drop if fast-failover
 
-### PortMod
+The apply-action algorithm should be applied to each bucket individually.
 
-TODO Don't allow. Ports may be used by multiple slices.
-
-### TableMod
-This message is deprecated in openflow 1.3, don't do anything.
+TODO How to do Modify/Delete matching
 
 ### MeterMod
 The meter identifier needs to be rewritten to a meter id allocated to the slice.
@@ -198,6 +205,13 @@ If the meter id is OFMP_ALL simulate it by deleting all meters in the slice rang
 The packet can then be forwarded.
 
 TODO simulating OFMP_ALL is slow, dealing with the response/failure messages of that seems difficult and the standard doesn't say you need to use adjacent meter id's.
+
+### PortMod
+
+TODO Don't allow. Ports may be used by multiple slices.
+
+### TableMod
+This message is deprecated in openflow 1.3, don't do anything.
 
 ### MultipartRequest
 Return a Bad Request error with type Bad Multipart. This indicates that this type of multipart message is not supported.
@@ -210,10 +224,12 @@ Providing statistics is currently out of scope for this project. Statistic messa
 Send an error message with type RoleRequestFailed and code Unsupported.
 
 ### GetAsyncRequest
-Retreive the setting from the controller structure and send a GetAsyncResponse message with these settings in them.
+Retreive the setting from the virtual-switch structure and send a GetAsyncResponse message with these settings in them.
 
 ### SetAsync
-Save the new settings in the controller structure.
+Save the new settings in the virtual-switch structure.
+
+Technically should these settings be saved per connection instead of per switch.
 
 ## Packets from a switch
 This section discusses the actions to perform on packets that are received unsollicited from a switch.
@@ -226,6 +242,7 @@ If table_id=0 & cookie=1 the packet comes from topology discovery.
 Else
   Log packet, show error
 
+Figure out what slice this packet comes from.
 Rewite table_id to slice table.
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
@@ -257,6 +274,9 @@ This section lists what data needs to be saved in the Hypervisor to function.
 ## Per virtual switch
  - datapath_id (made up, unique)
  - Map of actual packet buffers to virtual buffers and vice-versa, (dpid,buffer_no) <-> virtual_buffer_no
+ - packet_in_mask (=3)
+ - port_status_mask (=7)
+ - flow_removed_mask (=
 
 ## Per switch
  - n_buffers
@@ -264,6 +284,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - capabilities (only IP_REASM is currently used)
  - fragmentation_flags (ask via GetConfig)
  - miss_send_len (ask via GetConfig)
+ - Map of group_id's to virtual group_id's, group_id <-> (virtual_dpid,group_id)
  - For all other switches, on what port to route packets
 
 ## Async request filter
@@ -289,3 +310,8 @@ This section discusses some event that may happen that aren't directly openflow 
 ## Link lost detected via topology discovery
  - Sent port-down messages for all virtual ports using either link port
  - Rerun routing algorithm, update all routes
+
+# Notes
+Let all xid live in the system for a while so you know to what tenant to forward an error when you get 1
+
+TODO Remove this section
