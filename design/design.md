@@ -15,13 +15,13 @@ Each slice wants to be able to use multiple flow tables, group tables, meter tab
 This is achieved by allocating for each switch an amount of the available resources and rewriting the id's used by that switch.
 The first flow table is than used to forward packets to the flow tables it is meant to go into.
 
-For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet sent to table 20.
+For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet send to table 20.
 When slice 3 tries to set a flow rule in table 1 it is actually entered in table 10.
 If any of the flow rules set by table 3 have an goto-table instruction the table number is rewritten, so table 1 becomes 11 and so forth.
 
 Something similar is done with the group tables and meter tables, the group and meter tables don't have any logical ordering so according to the Openflow protocol a controller may try to use every group table in the 32 bit group id space.
 The Hypervisor has to therefor save a map from the virtual id's the slice uses and the real id's in the switch.
-When a slice has exhausted the amount of group tables reserved for it sent an error message.
+When a slice has exhausted the amount of group tables reserved for it send an error message.
 The same is used for the meter tables.
 
 ## Bandwidth isolation
@@ -113,7 +113,7 @@ Priority | Purpose | Amount | Match | Instructions
 
 Purpose | Id | Amount | Mode | Buckets
 --------|----|--------|------|--------
-Add outgoing PBB tag | Concatenation of slice-bits, switch-bits, port-bits | # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
+Add outgoing PBB tag, added reactively | Concatenation of slice-bits, switch-bits, port-bits | variable, but at most # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
 Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
 
 ## Meter tables:
@@ -136,8 +136,8 @@ Log and print versions supported by the controller
 Log packet and print error
 
 ### EchoRequest
-Sent an copied EchoRequest to all physical switches that have ports from this virtual switch.
-When all their EchoResponses are at the Hypervisor sent a EchoResponse back to the controller.
+Send an copied EchoRequest to all physical switches that have ports from this virtual switch.
+When all their EchoResponses are at the Hypervisor send a EchoResponse back to the controller.
 
 If any response comes back with an error forward that error, if an response doesn't come back also don't respond.
 
@@ -163,7 +163,7 @@ Drop and do nothing.
 Since this affects all packet handling on the switch which may be used by multiple slices is it not sensible to actually pass this on.
 
 ### PacketOut
-Pick a physical switch this is going to be sent to, if there is an output action sent it to the switch that has the relevant port on it.
+Pick a physical switch this is going to be send to, if there is an output action send it to the switch that has the relevant port on it.
 If there is no output action pick a random switch, if there are multiple just use the first one.
 
 The fields to be rewritten are the buffer-id, in-port and the actions (output, group, meter).
@@ -173,7 +173,7 @@ If the buffer-id is used but not available in the switch rewrite map return erro
 If the in-port=controller and there is an output action to the table surround the output to table action with a push-tag, set-field and pop-tag actions.
 This is necessary so the Hypervisor reserved table can figure out what slice this packet belongs to.
 
-Sent the packet to the switch.
+Send the packet to the switch.
 
 Remove the buffer-id rewrite from the virtual switch.
 
@@ -276,25 +276,25 @@ For each physical switch this virtual switch depends on:
     If group-id=all:
       Clone packet for each group-id in use by this virtual switch in physical switch group map
       Rewrite group-id's
-      Sent packets
+      Send packets
       Remove group-id's from physical switch map
     Else:
       Rewrite group-id
-      Sent packet
+      Send packet
       Remove group-id from physical switch map
   If type=add:
     Scan buckets:
       Use apply-action algorithm on the bucket action list
     Reserve new group-id in physical switch group-id map
     Rewrite group-id
-    Sent packet
+    Send packet
   If type=modify:
     If group-id is not in physical switch group-id map:
       Send error Group Mod Failed and type Unknown Group
     Rewrite group-id
     Scan buckets:
       Use apply-action algorithm on the bucket action list
-    Sent packet
+    Send packet
 ```
 
 ### MeterMod
@@ -310,21 +310,21 @@ For each physical switch this virtual switch depends on:
     If meter-id=all:
       Clone packet for each meter-id in use by this virtual switch in physical switch group map
       Rewrite meter-id's
-      Sent packets
+      Send packets
       Remove meter-id's from physical switch map
     Else:
       Rewrite meter-id
-      Sent packet
+      Send packet
       Remove meter-id from physical switch map
   If command=add:
     Reserve new meter-id in physical switch meter-id map
     Rewrite meter-id
-    Sent packet
+    Send packet
   If type=modify:
     If meter-id is not in physical switch meter-id map:
       Send error Meter Mod Failed and type Unknown Meter
     Rewrite meter-id
-    Sent packet
+    Send packet
 ```
 
 ### PortMod
@@ -421,13 +421,13 @@ All the packets that the Hypervisor initiates.
 
 ### Session setup and maintenance packets
 At the start of a connection send a hello packet that indicates the hypervisor only supports Openflow 1.3.
-Afterwards periodically sent EchoRequests to each controller and switch.
+Afterwards periodically send EchoRequests to each controller and switch.
 The echo requests
 
 ### Topology discovery packets
 The topology discovery packets are as tiny as possible packets with a pbb-tag.
-Periodically over every port is a packet sent with slice 255, the switch bits set to the switch it originates from and the port bits set to the port it originates from.
-When this packet is received by a switch is it sent to the controller so the controller can defer that a link exists.
+Periodically over every port is a packet send with slice 255, the switch bits set to the switch it originates from and the port bits set to the port it originates from.
+When this packet is received by a switch is it send to the controller so the controller can defer that a link exists.
 
 Topology discovery is run per port every second.
 To lower the load on each control channel are the packets spaced out over the period.
@@ -438,7 +438,7 @@ global counter = 0;
 Repeat:
   For each physical switch:
     If port counter exists:
-      Sent packet over port
+      Send packet over port
 
   counter += 1
   if counter=max(ports)
@@ -447,12 +447,24 @@ Repeat:
   wait period/max(ports)
 ```
 
-TODO This is just a barebone version of topology discovery.
-Something could be done with signing the packets so spoofing fake links would be harder.
-Also to reduce the load even more could ports that currently have no link receive less packets.
+This is just a barebone version of topology discovery.
+Future work could be signing the packets so spoofing fake links would be harder or to reduce the load even more could ports that currently have no link receive less packets.
 
 ### Changed topology group modifications
-If the topology is changed as detected by topology discovery.
+If the topology is changed as detected by topology discovery does the routing need to be changed.
+All the routing between switches done by the Hypervisor are actually forwarded via the group table.
+To update the routes the following needs to happen:
+```
+Find all-to-all network routes with floyd-warshall.
+
+For each physical switch:
+  For each created forward group entry:
+    Extract target switch from id switch bits
+    If the new route is different than the route stored:
+      Create group mod modify message
+      Send packet
+      Store new route
+```
 
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
@@ -495,11 +507,11 @@ The asynchronous request filter saves per controller what unsollicited messages 
 This section discusses some event that may happen that aren't directly openflow messages.
 
 ## New switch connection
- - Sent port-up messages for all virtual ports on this switch
+ - Send port-up messages for all virtual ports on this switch
  - Rerun routing algorithm, update all routes
 
 ## Lost switch connection
- - Sent port-down messages for all virtual ports on this switch
+ - Send port-down messages for all virtual ports on this switch
  - Rerun routing algorithm, update all routes
 
 ## New controller connection
@@ -509,7 +521,7 @@ This section discusses some event that may happen that aren't directly openflow 
 ## New link found via topology discovery
 
 ## Link lost detected via topology discovery
- - Sent port-down messages for all virtual ports using either link port
+ - Send port-down messages for all virtual ports using either link port
  - Rerun routing algorithm, update all routes
 
 # Notes
