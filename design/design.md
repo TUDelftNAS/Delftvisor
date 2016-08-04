@@ -84,6 +84,8 @@ If the packet needs to be outputted at this switch is the PBB tag removed and th
 
 Future work might include optimizing this method for the group table.
 If a rule generates a lot of copies of the packet it might be advantageous to apply the group table at a later switch instead of immediately.
+Another disadvantage of the current method is that every physical switch has all the rules from all virtual switches that have ports on the physical switch.
+This leads to an enormous redundancy amount of rules in each physical switch, only having 1 physical switch with the rules for a virtual switch would lead to more resources (flow/group/meter tables) being available to each virtual switch.
 
 # Flowtable layout
 The following section describes the layout of flow rules the Hypervisor.
@@ -92,7 +94,7 @@ The following section describes the layout of flow rules the Hypervisor.
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | eth-src=x, eth-dst=y | output(controller)
+70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | pbb-slice-bits=255 | output(controller)
 60 | Forward packet-out from tenant to personal flowtables | # of slices | in-port=controller, pbb-slice-bits=x | meter(n), write-metadata(0&1), pop-pbb, goto-tbl(n\*k+1)
 50 | Forward inter-virtual-switch traffic | # of ports with links \* (# of switches-1) | in-port=x, pbb-switch-bits=y | output(z)
 40 | Output already processed packet over port with link | # of slices \* # of ports with link \* # of ports with link | in-port=x, pbb-slice-bits=y pbb-switch-bits=z, pbb-port-bits=w | meter(n), output(a)
@@ -183,7 +185,6 @@ If table_id=OFPTT_ALL create clone messages for each table assigned to this slic
 If command=OFPC_DELETE* rewrite the out_port field and out_group field
 
 The flags field can be directly forwarded.
-TODO Should the cookie field be rewritten?
 
 The following rewrite algorithm should be used on apply-action action lists:
 ```
@@ -196,55 +197,99 @@ Scan action list:
     If output over FLOOD port:
       Replace with group action to slice flood group
     If output to port not on this switch:
+      If relevant forwarding group is not created:
+        Create groupmod message with actions push-pbb, set-field, output
+        Send groupmod message
+        Send barrierrequest
       Replace with group action that adds correct tag and output over correct link
 ```
 
 The following algorithm should be used on flowmod messages:
 ```
-Scan instruction list:
-  If instruction is goto-tbl:
-    Rewrite goto-tbl number
-  If instruction is meter:
-    Rewrite meter number
-  If instruction is apply-action:
-    Use apply-action list algorithm
-  If instruction is write-action:
-    Scan action list:
-      If action is group:
-        Rewrite group number
-        Add instruction write-metadata with data 1 and mask 1
-      If action is output:
-        If output to port on this switch:
-          Rewrite output port number
-        If output over FLOOD port:
-          Replace with group action to slice flood group
-          Add matching on metadata 1 and mask 1
-          Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
-        If output to port not on this switch:
-          Replace with group action that adds correct tag and output over correct link
-          Add matching on metadata 1 and mask 1
-          Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
-  If instruction is clear-actions:
-    Add write-metadata instruction with metadata 0 and mask 1
-  If instruction is write-metadata:
-    If left-most bit in mask is set:
-      Drop rule, Return error
-    Else:
-      Shift mask and metadata 1 bit to the left
-Scan match fields:
-  If match on metadata:
-    If left-most bit in mask is set:
-      Drop rule, return error
-    Else:
-      Shift mask and metadata 1 bit to the left
+Copy packet for each physical switch containing ports of this virtual switch
+
+For each clone packet:
+  Scan instruction list:
+    If instruction is goto-tbl:
+      Rewrite goto-tbl number
+    If instruction is meter:
+      Rewrite meter number
+    If instruction is apply-action:
+      Use apply-action list algorithm
+    If instruction is write-action:
+      Scan action list:
+        If action is group:
+          Rewrite group number
+          Add instruction write-metadata with data 1 and mask 1
+        If action is output:
+          If output to port on this switch:
+            Rewrite output port number
+          If output over FLOOD port:
+            Replace with group action to slice flood group
+            Add matching on metadata 1 and mask 1
+            Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
+          If output to port not on this switch:
+            If relevant forwarding group is not created:
+              Create groupmod message with actions push-pbb, set-field, output
+              Send groupmod message
+              Send barrierrequest
+            Replace output action with group action that adds correct tag and output over correct link
+            Add matching on metadata 1 and mask 1
+            Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
+    If instruction is clear-actions:
+      Add write-metadata instruction with metadata 0 and mask 1
+    If instruction is write-metadata:
+      If left-most bit in mask is set:
+        Drop rule, Return error
+      Else:
+        Shift mask and metadata 1 bit to the left
+
+  Scan match fields:
+    If match on metadata:
+      If left-most bit in mask is set:
+        Drop rule, return error
+      Else:
+        Shift mask and metadata 1 bit to the left
+
+  Send packet(s)
 ```
+
+For every physical switch can the mapping from virtual to physical be different which is why it needs to be done after cloning the packets.
 
 ### GroupMod
 Drop if fast-failover
 
 The apply-action algorithm should be applied to each bucket individually.
 
-TODO How to do Modify/Delete matching
+Apply the following algorithm:
+```
+If type=fast-failover:
+  Send error Group Mod Failed with type Bad Type.
+  Done
+
+For each physical switch this virtual switch depends on:
+  If type=delete:
+    If group-id=all:
+      Clone packet for each group-id in use by this virtual switch in physical switch group map
+      Rewrite group-id's
+      Sent packets
+      Remove group-id's from physical switch map
+    Else:
+      Rewrite group-id
+      Sent packet
+      Remove group-id from physical switch map
+  If type=add:
+    Scan buckets:
+      Use apply-action algorithm on the bucket action list
+    Reserve new group-id in physical switch group-id map
+    Rewrite group-id
+    Sent packet
+  If type=modify:
+    Rewrite group-id
+    Scan buckets:
+      Use apply-action algorithm on the bucket action list
+    Sent packet
+```
 
 ### MeterMod
 The meter identifier needs to be rewritten to a meter id allocated to the slice.
@@ -376,6 +421,9 @@ TODO This is just a barebone version of topology discovery.
 Something could be done with signing the packets so spoofing fake links would be harder.
 Also to reduce the load even more could ports that currently have no link receive less packets.
 
+### Changed topology group modifications
+If the topology is changed as detected by topology discovery.
+
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
 
@@ -400,6 +448,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - fragmentation-flags (ask via GetConfig)
  - miss-send-len (ask via GetConfig)
  - Internal id (for routing)
+ - Map of created forward group entries (the group-id's of groups that are created that forward traffic to an output port while adding a pbb-tag) to the output port they forward to, group-id -> output-port
  - Map of group-id's to virtual group-id's, group-id <-> (virtual-dpid,group-id)
  - Map of meter-id's to virtual meter-id's, meter-id <-> (virtual-dpid,meter-id)
  - Map of xid's so responses can be properly forwarded, xid <-> (virtual-switch,xid)
