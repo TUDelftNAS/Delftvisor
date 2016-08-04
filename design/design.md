@@ -130,7 +130,7 @@ For every packet that get's forward the xid in the openflow header needs to be r
 The response from the physical switch, if it get's forwarded back to the controller, needs to be rewritten again.
 
 ### Hello
-Sent back an Hello message indicating the Hypervisor only support openflow 1.3.
+Log and print versions supported by the controller
 
 ### Error
 Log packet and print error
@@ -191,6 +191,8 @@ The following rewrite algorithm should be used on apply-action action lists:
 Scan action list:
   If action is group:
     Rewrite group number
+  If action is queue:
+    Return error Bad Action with type Unsupported Order
   If action is output:
     If output to port on this switch:
       Rewrite output port number
@@ -221,6 +223,8 @@ For each clone packet:
         If action is group:
           Rewrite group number
           Add instruction write-metadata with data 1 and mask 1
+        If action is queue:
+          Return error Bad Action with type Unsupported Order
         If action is output:
           If output to port on this switch:
             Rewrite output port number
@@ -285,6 +289,8 @@ For each physical switch this virtual switch depends on:
     Rewrite group-id
     Sent packet
   If type=modify:
+    If group-id is not in physical switch group-id map:
+      Send error Group Mod Failed and type Unknown Group
     Rewrite group-id
     Scan buckets:
       Use apply-action algorithm on the bucket action list
@@ -292,16 +298,37 @@ For each physical switch this virtual switch depends on:
 ```
 
 ### MeterMod
-The meter identifier needs to be rewritten to a meter id allocated to the slice.
-If the meter id was out of the allowed range of meters for the slice the hypervisor will sent back an Error with type MeterModFailed and code OutofMeters.
-If the meter id is OFMP_ALL simulate it by deleting all meters in the slice range.
-The packet can then be forwarded.
+Use the same algorithm for GroupMod, instead of fast-failover stop meter being placed on the controller of the slow datapath.
 
-TODO simulating OFMP_ALL is slow, dealing with the response/failure messages of that seems difficult and the standard doesn't say you need to use adjacent meter id's.
+```
+If meter-id=controller or meter-id=slowpath:
+  Send error Meter Mod Failed with type Invalid Meter
+  Done
+
+For each physical switch this virtual switch depends on:
+  If command=delete:
+    If meter-id=all:
+      Clone packet for each meter-id in use by this virtual switch in physical switch group map
+      Rewrite meter-id's
+      Sent packets
+      Remove meter-id's from physical switch map
+    Else:
+      Rewrite meter-id
+      Sent packet
+      Remove meter-id from physical switch map
+  If command=add:
+    Reserve new meter-id in physical switch meter-id map
+    Rewrite meter-id
+    Sent packet
+  If type=modify:
+    If meter-id is not in physical switch meter-id map:
+      Send error Meter Mod Failed and type Unknown Meter
+    Rewrite meter-id
+    Sent packet
+```
 
 ### PortMod
-
-TODO Don't allow. Ports may be used by multiple slices.
+Send error Port Mod Failed with type EPerm.
 
 ### TableMod
 This message is deprecated in openflow 1.3, don't do anything.
@@ -316,6 +343,7 @@ Port statistics can be tricky since on shared links the traffic caused by each s
 This could be done by remembering which flows cause packets to be forwarded to a port and query their statistics instead and aggregate those.
 
 ### QueueGetConfigRequest
+Return an empty QueueGetConfigResponse message.
 
 ### RoleRequest
 Send an error message with type RoleRequestFailed and code Unsupported.
@@ -392,7 +420,9 @@ Only forward if the controller Async request filter says the controller wants to
 All the packets that the Hypervisor initiates.
 
 ### Session setup and maintenance packets
-Periodically sent EchoRequests to each controller.
+At the start of a connection send a hello packet that indicates the hypervisor only supports Openflow 1.3.
+Afterwards periodically sent EchoRequests to each controller and switch.
+The echo requests
 
 ### Topology discovery packets
 The topology discovery packets are as tiny as possible packets with a pbb-tag.
@@ -429,6 +459,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
 
 ## Globally
  - Bidirectional map from id to physical switch
+ - Map to lookup physical switch via datapath-id
 
 ## Per slice
  - Maximum rate
@@ -439,6 +470,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - packet-in-mask (=3)
  - port-status-mask (=7)
  - flow-removed-mask (=15)
+ - If this switch received an EchoReply on the last EchoRequest
  - All physical switches this virtual switch depends on
 
 ## Per physical switch
@@ -448,6 +480,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - fragmentation-flags (ask via GetConfig)
  - miss-send-len (ask via GetConfig)
  - Internal id (for routing)
+ - If this switch received an EchoReply on the last EchoRequest
  - Map of created forward group entries (the group-id's of groups that are created that forward traffic to an output port while adding a pbb-tag) to the output port they forward to, group-id -> output-port
  - Map of group-id's to virtual group-id's, group-id <-> (virtual-dpid,group-id)
  - Map of meter-id's to virtual meter-id's, meter-id <-> (virtual-dpid,meter-id)
