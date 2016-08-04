@@ -111,7 +111,7 @@ Return an FeatureReply with:
  - capabilities = 0, Statistics are currently not in the scope of this project. The IP_REASM should be set if all underlying switches implement it.
 
 ### GetConfigRequest
-Send a GetConfigResponse with the fragmentations_flags & and the miss_send_len minimum.
+Send a GetConfigResponse with the fragmentations_flags & (and operation) and the miss_send_len minimum.
 
 ### SetConfig
 Drop and do nothing. Since this affects all packet handling on the switch which may be used by multiple slices is it not sensible to actually pass this on.
@@ -119,13 +119,13 @@ Drop and do nothing. Since this affects all packet handling on the switch which 
 ### PacketOut
 Pick a physical switch this is going to be sent to, if there is an output action sent it to the switch that has the relevant port on it. If there is no output action pick a random switch, if there are multiple just use the first one.
 
-The fields to be rewritten are the buffer_id, in_port and the actions (output, group, meter). The actions are to be rewritten as if they are in an apply-action instruction.
+The fields to be rewritten are the buffer-id, in-port and the actions (output, group, meter). The actions are to be rewritten as if they are in an apply-action instruction. If the buffer-id is used but not available in the switch rewrite map.
 
 If the in-port=controller and there is an output action to the table surround the output to table action with a push-tag, set-field and pop-tag actions. This is necessary so the Hypervisor reserved table can figure out what slice this packet belongs to.
 
 Sent the packet to the switch.
 
-Remove the buffer_id rewrite from the virtual switch.
+Remove the buffer-id rewrite from the virtual switch.
 
 TODO Use VLAN tag instead of PBB tag since it's smaller?
 
@@ -236,21 +236,45 @@ This section discusses the actions to perform on packets that are received unsol
 The packets EchoResponse, FeatureResponse, GetConfigResponse, QueueGetConfigResponse are already discussed in the previous section.
 
 ### PacketIn
-Determine if this is caused by an address that needs to be rewritten.
-If table_id=0 & cookie=1 the packet comes from topology discovery.
-  Mark the link as live, reset liveness timer, drop packet.
-Else
-  Log packet, show error
+Use the following algorithm:
+```
+If table-id=0:
+  If eth-src=x & eth-dst=y:
+    Packet from topology discovery, extract what switch it is from, mark link live, reset liveness timer
+  Else:
+    Log packet, print error
+Else:
+  Figure out what slice generated this error via table-id
 
-Figure out what slice this packet comes from.
-Rewite table_id to slice table.
-Only forward if the controller Async request filter says the controller wants to receive these packets.
+  Rewrite table-id in packet
+
+  Scan match fields:
+    If match=metadata:
+      Shift metadata value right (no need to remove if metadata is now 0, optional OXM TLV can be included)
+    If match=in-port:
+      Rewrite in port to virtual port
+    If match=physical-in-port:
+      Remove from match
+
+  If buffer-id!=no-buffer:
+    Check all virtual switches depending on this physical switch:
+      Remove this buffer-id from there buffer-id rewrite map
+    Save buffer-id in virtual switch rewrite map
+
+  Send packet to tenant controller
+```
+
+TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking the the PBB tag.
 
 ### FlowRemoved
+
+Some rules from the tenant become 2 rules in the physical switch (group action in the write-action instruction). Make sure that stays consistent.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
 ### PortStatus
+
+Figure out what virtual ports are affected.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
@@ -270,22 +294,26 @@ The topology discovery packets are LLDP packets sent in a reserved slice with id
 This section lists what data needs to be saved in the Hypervisor to function.
 
 ## Per slice
+ - Maximum rate
 
 ## Per virtual switch
- - datapath_id (made up, unique)
- - Map of actual packet buffers to virtual buffers and vice-versa, (dpid,buffer_no) <-> virtual_buffer_no
- - packet_in_mask (=3)
- - port_status_mask (=7)
- - flow_removed_mask (=
+ - datapath-id (made up, unique)
+ - Map of actual packet buffers to virtual buffers and vice-versa, (dpid,buffer-no) <-> virtual-buffer-no
+ - packet-in-mask (=3)
+ - port-status-mask (=7)
+ - flow-removed-mask (=15)
+ - All physical switches this virtual switch depends on
 
-## Per switch
- - n_buffers
- - n_tables
+## Per physical switch
+ - n-buffers
+ - n-tables
  - capabilities (only IP_REASM is currently used)
- - fragmentation_flags (ask via GetConfig)
- - miss_send_len (ask via GetConfig)
- - Map of group_id's to virtual group_id's, group_id <-> (virtual_dpid,group_id)
- - For all other switches, on what port to route packets
+ - fragmentation-flags (ask via GetConfig)
+ - miss-send-len (ask via GetConfig)
+ - Map of group-id's to virtual group-id's, group-id <-> (virtual-dpid,group-id)
+ - Map of meter-id's to virtual meter-id's, meter-id <-> (virtual-dpid,meter-id)
+ - For all other physical switches, on what port to route packets
+ - All virtual switches depending on this physical switch
 
 ## Async request filter
 The asynchronous request filter saves per controller what unsollicited messages they want to receive.
@@ -313,5 +341,7 @@ This section discusses some event that may happen that aren't directly openflow 
 
 # Notes
 Let all xid live in the system for a while so you know to what tenant to forward an error when you get 1
+
+Need a way to easily lookup physical switches by datapath id
 
 TODO Remove this section
