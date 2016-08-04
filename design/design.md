@@ -1,49 +1,89 @@
-This document should summarize the design decisions taken when building the Openflow Hypervisor. The original goal was to design a Hypervisor that would expose Openflow 1.3 to it's tenants while the network below could consist of Openflow 1.0 and Openflow 1.3 switches. During design it became apparent that simulating Openflow 1.3 on Openflow 1.0 switches is not feasible. The proposed solution was to re-route packets from Openflow 1.0 switches to Openflow 1.3 switches and handle the packets there. Unfortunately doesn't Openflow 1.0 support multiple VLAN tags imposing unacceptable constraints on the Hypervisor. Therefor is the design below for an Openflow 1.3 Hypervisor.
+This document should summarize the design decisions taken when building the Openflow Hypervisor.
+The original goal was to design a Hypervisor that would expose Openflow 1.3 to it's tenants while the network below could consist of Openflow 1.0 and Openflow 1.3 switches.
+During design it became apparent that simulating Openflow 1.3 on Openflow 1.0 switches is not feasible.
+The proposed solution was to re-route packets from Openflow 1.0 switches to Openflow 1.3 switches and handle the packets there.
+Unfortunately doesn't Openflow 1.0 support multiple VLAN tags imposing unacceptable constraints on the Hypervisor.
+Therefor is the design below for an Openflow 1.3 Hypervisor.
 
 # Isolation requirements
-The Hypervisor needs to prevent tenants from interfering with each other. This section list the requirements of what needs to be isolated and how to do it.
+The Hypervisor needs to prevent tenants from interfering with each other.
+This section list the requirements of what needs to be isolated and how to do it.
 
 ## Switch features isolation
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
 
-This is achieved by allocating for each switch an amount of the available resources and rewriting the id's used by that switch. The first flow table is than used to forward packets to the flow tables it is meant to go into.
+This is achieved by allocating for each switch an amount of the available resources and rewriting the id's used by that switch.
+The first flow table is than used to forward packets to the flow tables it is meant to go into.
 
-For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet sent to table 20. When slice 3 tries to set a flow rule in table 1 it is actually entered in table 10. If any of the flow rules set by table 3 have an goto-table instruction the table number is rewritten, so table 1 becomes 11 and so forth.
+For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet sent to table 20.
+When slice 3 tries to set a flow rule in table 1 it is actually entered in table 10.
+If any of the flow rules set by table 3 have an goto-table instruction the table number is rewritten, so table 1 becomes 11 and so forth.
 
-Something similar is done with the group tables and meter tables, the group and meter tables don't have any logical ordering so according to the Openflow protocol a controller may try to use every group table in the 32 bit group id space. The Hypervisor has to therefor save a map from the virtual id's the slice uses and the real id's in the switch. When a slice has exhausted the amount of group tables reserved for it sent an error message. The same is used for the meter tables.
+Something similar is done with the group tables and meter tables, the group and meter tables don't have any logical ordering so according to the Openflow protocol a controller may try to use every group table in the 32 bit group id space.
+The Hypervisor has to therefor save a map from the virtual id's the slice uses and the real id's in the switch.
+When a slice has exhausted the amount of group tables reserved for it sent an error message.
+The same is used for the meter tables.
 
 ## Bandwidth isolation
 Each slice should get a guaranteed slice of the bandwidth.
 
-This is achieved by metering a packet before it is forwarded to a slice's flow tables. This hard limits the amount of packets that each slice can process. The maximum rate a slice can use is pre-configured and used throughout the entire network.
+This is achieved by metering a packet before it is forwarded to a slice's flow tables.
+This hard limits the amount of packets that each slice can process.
+The maximum rate a slice can use is pre-configured and used throughout the entire network.
 
-More fine-grained bandwidth isolation remains future work. A problem with the current approach is that even if the network has the capability to allow a slice to use more traffic is it not utilized. During configuration an error might be made reserving more traffic over a link than is actually possible. This is currently not detected and would allow slices to influence each others traffic.
+More fine-grained bandwidth isolation remains future work.
+A problem with the current approach is that even if the network has the capability to allow a slice to use more traffic is it not utilized.
+During configuration an error might be made reserving more traffic over a link than is actually possible.
+This is currently not detected and would allow slices to influence each others traffic.
 
 ## Address space isolation
 Each slice needs to be able to use the full Ethernet/IP address space without clashing with another slice.
 
-OpenVirtex, an Openflow 1.0 Hypervisor, achieves this by rewriting the source and destination addresses at the edge of the network to an internal representation and rewriting it again before the packet is output again at the network edge. With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) which is why a different concept was chosen.
+OpenVirtex, an Openflow 1.0 Hypervisor, achieves this by rewriting the source and destination addresses at the edge of the network to an internal representation and rewriting it again before the packet is output again at the network edge.
+With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) which is why a different concept was chosen.
 
-PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 120 bits that support masking. Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing and VLAN tags only allow for 15 bits of maskable information which wasn't enough to contain the routing information for a sizable network.
+PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 120 bits that support masking.
+Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing and VLAN tags only allow for 15 bits of maskable information which wasn't enough to contain the routing information for a sizable network.
 
-The output action need to be rewritten to add the tag if necessary. For this purpose is reactively a group table entry created with type indirect for each slice/switch/port combination. This entry adds the PBB tag, sets the values and outputs the packet over the port it needs to go to. In an apply action instruction the output action can just be changed to the group action without encountering problems but the write-action instruction needs some extra logic. The action set of a packet can be overwritten by in other flow tables, per type of action only one is allowed in the action set. If an action set contains an group and an output action only the group action is executed. The described rewrite would change an output action to a group action, this means it might overwrite a group action set by the tenant in an earlier table. To solve this problem a bit in the metadata field is used. When a packet has a group action in the action set the bit is set to 1, when it is removed the bit is set to 0. Every flow rule that has an output action in the write-action instruction that needs to be rewritten to a group action is duplicated, a version with the output action rewritten that matches on the metadata bit being 1 and a version with the output action removed that matches on the metadata bit being 0. This adds the constraints to the tenant controller that they cannot match/write on the left-most bit of the metadata field.
+The output action need to be rewritten to add the tag if necessary.
+For this purpose is reactively a group table entry created with type indirect for each slice/switch/port combination.
+This entry adds the PBB tag, sets the values and outputs the packet over the port it needs to go to.
+In an apply action instruction the output action can just be changed to the group action without encountering problems but the write-action instruction needs some extra logic.
+The action set of a packet can be overwritten by in other flow tables, per type of action only one is allowed in the action set.
+If an action set contains an group and an output action only the group action is executed.
+The described rewrite would change an output action to a group action, this means it might overwrite a group action set by the tenant in an earlier table.
+To solve this problem a bit in the metadata field is used.
+When a packet has a group action in the action set the bit is set to 1, when it is removed the bit is set to 0.
+Every flow rule that has an output action in the write-action instruction that needs to be rewritten to a group action is duplicated, a version with the output action rewritten that matches on the metadata bit being 1 and a version with the output action removed that matches on the metadata bit being 0.
+This adds the constraints to the tenant controller that they cannot match/write on the left-most bit of the metadata field.
 
-PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable. This allows for 120 bits of extra information per packet. Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit. Since we also need to reserve some group id's for the tenants only 31 bits are used. Another problem comes with the amount of flow tables, the flow table id is 8 bits and per slice we need at least 1 flow table limiting the number of slices to a maximum of 254 (8 bits). These would be split up using:
+PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable.
+This allows for 120 bits of extra information per packet.
+Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit.
+Since we also need to reserve some group id's for the tenants only 31 bits are used.
+Another problem comes with the amount of flow tables, the flow table id is 8 bits and per slice we need at least 1 flow table limiting the number of slices to a maximum of 254 (8 bits).
+These would be split up using:
  - 8 bit slice id
  - 12 bit switch id
  - 11 bit port id
 
 ## Topology abstraction
-Each virtual switch doesn't need to correspond 1:1 to a physical switch. A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
+Each virtual switch doesn't need to correspond 1:1 to a physical switch.
+A tenant might want to abstract away some complexity or the network operator might want to hide some implementation details.
 
-Topology abstraction is allowed by defining each virtual switch as a combination of physical ports, which may be on other switches. Constraints are imposed such as:
- - Only ports on a switch-switch connection may be shared between multiple virtual switches, if no switch-switch connection is detected the virtual ports stay down.
+Topology abstraction is allowed by defining each virtual switch as a combination of physical ports, which may be on other switches.
+Constraints are imposed such as:
+ - Only ports on a switch-switch connection may be shared between multiple virtual switches, if no switch-switch connection is detected the virtual ports stay down
  - If a virtual switch has a port on a switch-switch connection it also has to have a port in that slice on the other side of the connection, if that link is not found the virtual port should stay down
- - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch.
+ - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch
 
-All packets are handled by tenant rules on the switch they arrive in. If a packet needs to be output on a port on another switch the output action is rewritten to add a BPP tag containing the switch/port target and output on a switch-switch port with a route to the target. In the first flowtable packets that need to be forwarded are detected and appropriately forwarded. If the packet needs to be outputted at this switch is the PBB tag removed and the packet outputted.
+All packets are handled by tenant rules on the switch they arrive in.
+If a packet needs to be output on a port on another switch the output action is rewritten to add a BPP tag containing the switch/port target and output on a switch-switch port with a route to the target.
+In the first flowtable packets that need to be forwarded are detected and appropriately forwarded.
+If the packet needs to be outputted at this switch is the PBB tag removed and the packet outputted.
 
-Future work might include optimizing this method for the group table. If a rule generates a lot of copies of the packet it might be advantageous to apply the group table at a later switch instead of immediately.
+Future work might include optimizing this method for the group table.
+If a rule generates a lot of copies of the packet it might be advantageous to apply the group table at a later switch instead of immediately.
 
 # Flowtable layout
 The following section describes the layout of flow rules the Hypervisor.
@@ -90,6 +130,9 @@ The response from the physical switch, if it get's forwarded back to the control
 ### Hello
 Sent back an Hello message indicating the Hypervisor only support openflow 1.3.
 
+### Error
+Log packet and print error
+
 ### EchoRequest
 Sent an copied EchoRequest to all physical switches that have ports from this virtual switch.
 When all their EchoResponses are at the Hypervisor sent a EchoResponse back to the controller.
@@ -114,14 +157,19 @@ Return an FeatureReply with:
 Send a GetConfigResponse with the fragmentations_flags & (and operation) and the miss_send_len minimum.
 
 ### SetConfig
-Drop and do nothing. Since this affects all packet handling on the switch which may be used by multiple slices is it not sensible to actually pass this on.
+Drop and do nothing.
+Since this affects all packet handling on the switch which may be used by multiple slices is it not sensible to actually pass this on.
 
 ### PacketOut
-Pick a physical switch this is going to be sent to, if there is an output action sent it to the switch that has the relevant port on it. If there is no output action pick a random switch, if there are multiple just use the first one.
+Pick a physical switch this is going to be sent to, if there is an output action sent it to the switch that has the relevant port on it.
+If there is no output action pick a random switch, if there are multiple just use the first one.
 
-The fields to be rewritten are the buffer-id, in-port and the actions (output, group, meter). The actions are to be rewritten as if they are in an apply-action instruction. If the buffer-id is used but not available in the switch rewrite map.
+The fields to be rewritten are the buffer-id, in-port and the actions (output, group, meter).
+The actions are to be rewritten as if they are in an apply-action instruction.
+If the buffer-id is used but not available in the switch rewrite map return error Bad Request type Buffer Empty.
 
-If the in-port=controller and there is an output action to the table surround the output to table action with a push-tag, set-field and pop-tag actions. This is necessary so the Hypervisor reserved table can figure out what slice this packet belongs to.
+If the in-port=controller and there is an output action to the table surround the output to table action with a push-tag, set-field and pop-tag actions.
+This is necessary so the Hypervisor reserved table can figure out what slice this packet belongs to.
 
 Sent the packet to the switch.
 
@@ -214,9 +262,13 @@ TODO Don't allow. Ports may be used by multiple slices.
 This message is deprecated in openflow 1.3, don't do anything.
 
 ### MultipartRequest
-Return a Bad Request error with type Bad Multipart. This indicates that this type of multipart message is not supported.
+Return a Bad Request error with type Bad Multipart.
+This indicates that this type of multipart message is not supported.
 
-Providing statistics is currently out of scope for this project. Statistic messages could be rewritten, passed to the switches and aggregated to provide this functionality. Port statistics can be tricky since on shared links the traffic caused by each slices would need to be isolated. This could be done by remembering which flows cause packets to be forwarded to a port and query their statistics instead and aggregate those.
+Providing statistics is currently out of scope for this project.
+Statistic messages could be rewritten, passed to the switches and aggregated to provide this functionality.
+Port statistics can be tricky since on shared links the traffic caused by each slices would need to be isolated.
+This could be done by remembering which flows cause packets to be forwarded to a port and query their statistics instead and aggregate those.
 
 ### QueueGetConfigRequest
 
@@ -234,6 +286,15 @@ Technically should these settings be saved per connection instead of per switch.
 ## Packets from a switch
 This section discusses the actions to perform on packets that are received unsollicited from a switch.
 The packets EchoResponse, FeatureResponse, GetConfigResponse, QueueGetConfigResponse are already discussed in the previous section.
+
+### Error
+The error should be forwarded to the relevant tenant controller.
+
+Lookup via the xid map in the physical switch structure what virtual switch this was initiated from. Rewrite the xid and forward to the tenant.
+
+Optionally log and print the error.
+
+TODO The error message contains part of openflow message that generated it. This is currently just forwarded without any rewrite happening.
 
 ### PacketIn
 Use the following algorithm:
@@ -266,9 +327,13 @@ Else:
 
 TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking the the PBB tag.
 
+The buffer-id maps do not need to be maintained since if the buffer doesn't exist anymore on the switch is the error message just forwarded back to the tenant.
+If a buffer-id would be re-used by a switch is the entry deleted from all virtual switches and does the PacketOut return an error from the Hypervisor.
+
 ### FlowRemoved
 
-Some rules from the tenant become 2 rules in the physical switch (group action in the write-action instruction). Make sure that stays consistent.
+Some rules from the tenant become 2 rules in the physical switch (group action in the write-action instruction).
+Make sure that stays consistent.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
@@ -278,20 +343,44 @@ Figure out what virtual ports are affected.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
-## Packets initiated from switch
-All the packets that the switch initiates.
+## Packets initiated from Hypervisor
+All the packets that the Hypervisor initiates.
 
 ### Session setup and maintenance packets
-
 Periodically sent EchoRequests to each controller.
 
-### Topology discovery PacketOut
-Periodically sent PacketOut packets to every physical port to check if a link (still) is present.
+### Topology discovery packets
+The topology discovery packets are as tiny as possible packets with a pbb-tag.
+Periodically over every port is a packet sent with slice 255, the switch bits set to the switch it originates from and the port bits set to the port it originates from.
+When this packet is received by a switch is it sent to the controller so the controller can defer that a link exists.
 
-The topology discovery packets are LLDP packets sent in a reserved slice with id 0.
+Topology discovery is run per port every second.
+To lower the load on each control channel are the packets spaced out over the period.
+The algorithm executed is:
+```
+global counter = 0;
+
+Repeat:
+  For each physical switch:
+    If port counter exists:
+      Sent packet over port
+
+  counter += 1
+  if counter=max(ports)
+    counter = 0
+
+  wait period/max(ports)
+```
+
+TODO This is just a barebone version of topology discovery.
+Something could be done with signing the packets so spoofing fake links would be harder.
+Also to reduce the load even more could ports that currently have no link receive less packets.
 
 # Data necessary
 This section lists what data needs to be saved in the Hypervisor to function.
+
+## Globally
+ - Bidirectional map from id to physical switch
 
 ## Per slice
  - Maximum rate
@@ -310,8 +399,10 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - capabilities (only IP_REASM is currently used)
  - fragmentation-flags (ask via GetConfig)
  - miss-send-len (ask via GetConfig)
+ - Internal id (for routing)
  - Map of group-id's to virtual group-id's, group-id <-> (virtual-dpid,group-id)
  - Map of meter-id's to virtual meter-id's, meter-id <-> (virtual-dpid,meter-id)
+ - Map of xid's so responses can be properly forwarded, xid <-> (virtual-switch,xid)
  - For all other physical switches, on what port to route packets
  - All virtual switches depending on this physical switch
 
@@ -341,6 +432,10 @@ This section discusses some event that may happen that aren't directly openflow 
 
 # Notes
 Let all xid live in the system for a while so you know to what tenant to forward an error when you get 1
+
+Some modification messages generate multiple modification messages to the switches.
+If an error exists in those messages how to make sure the tenant only receives 1 error message?
+What to do with messages that get accepted by only a subset of all the switches?
 
 Need a way to easily lookup physical switches by datapath id
 
