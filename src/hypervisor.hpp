@@ -11,6 +11,9 @@
 class Hypervisor {
 private:
 	boost::asio::signal_set signals;
+	boost::asio::ip::tcp::acceptor switch_acceptor;
+
+	std::vector<Slice> slices;
 
 	/// A signal has been received
 	void handle_signals(
@@ -19,9 +22,14 @@ private:
 	);
 
 public:
+	/// Construct a new hypervisor object
 	Hypervisor( boost::asio::io_service& io );
+
 	/// Start running the hypervisor
 	void start();
-	/// Stop the hypervisor from running
+	/// Stop running the hypervisor
 	void stop();
+
+	/// Load configuration from file
+	void load_configuration( std::string filename );
 };
