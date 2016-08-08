@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
 		threads[i].join();
 	}
 
-	std::cout << "All done!" << std::endl;
+	std::cout << "All done" << std::endl;
 
 	return 0;
 }
