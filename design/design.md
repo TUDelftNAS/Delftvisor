@@ -12,12 +12,10 @@ This section list the requirements of what needs to be isolated and how to do it
 ## Switch features isolation
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
 
-This is achieved by allocating for each switch an amount of the available resources and rewriting the id's used by that switch.
-The first flow table is than used to forward packets to the flow tables it is meant to go into.
-
-For example if slice 3 used the flow tables 10 to 20 and a packet arrives for that slice is that packet send to table 20.
-When slice 3 tries to set a flow rule in table 1 it is actually entered in table 10.
-If any of the flow rules set by table 3 have an goto-table instruction the table number is rewritten, so table 1 becomes 11 and so forth.
+This is achieved by allocating for each slice an amount of the available resources and rewriting the id's used by that slice.
+The first flow table is reserved by the hypervisor for handling hypervisor traffic and applying actions to the packets such as rate-limiting certain slices.
+Each packet gets a number attached in the metadata field which contains the slice it is in, each flowmod than adds a match to the slice that flowmod belongs to.
+This allows each slice to use most tables, a tenant can even use the metadata field only the first 10 bits are reserved for the slice id.
 
 Something similar is done with the group tables and meter tables, the group and meter tables don't have any logical ordering so according to the Openflow protocol a controller may try to use every group table in the 32 bit group id space.
 The Hypervisor has to therefor save a map from the virtual id's the slice uses and the real id's in the switch.
@@ -61,11 +59,10 @@ PBB allows for an extra pair of source/destination mac addresses in a packet and
 This allows for 120 bits of extra information per packet.
 Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit.
 Since we also need to reserve some group id's for the tenants only 31 bits are used.
-Another problem comes with the amount of flow tables, the flow table id is 8 bits and per slice we need at least 1 flow table limiting the number of slices to a maximum of 254 (8 bits).
 These would be split up using:
- - 8 bit slice id
- - 12 bit switch id
- - 11 bit port id
+ - 10 bit slice id
+ - 11 bit switch id
+ - 10 bit port id
 
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch.
@@ -90,7 +87,7 @@ This leads to an enormous redundancy amount of rules in each physical switch, on
 # Flowtable layout
 The following section describes the layout of flow rules the Hypervisor.
 
-## Table 0, Hypervisor reserved table:
+## Table 0, Hypervisor reserved table
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
@@ -103,7 +100,7 @@ Priority | Purpose | Amount | Match | Instructions
 10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), write-metadata(0&1), goto-tbl(n\*k+1)
  0 | Error detection rule, cookie=3 | 1 | * | output(controller)
 
-## Table n | n>0, tenant tables:
+## Table n | n>0, tenant tables
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
@@ -116,7 +113,7 @@ Purpose | Id | Amount | Mode | Buckets
 Add outgoing PBB tag, added reactively | Concatenation of slice-bits, switch-bits, port-bits | variable, but at most # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
 Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
 
-## Meter tables:
+## Meter tables
 The first n meter tables are reserved where n is the number of slices.
 All these have 1 meter band with action drop when the rate comes above the allowed rate for the slice.
 
@@ -246,14 +243,16 @@ For each clone packet:
       If left-most bit in mask is set:
         Drop rule, Return error
       Else:
-        Shift mask and metadata 1 bit to the left
+        Shift mask and metadata 11 bits to the left
 
   Scan match fields:
     If match on metadata:
       If left-most bit in mask is set:
         Drop rule, return error
       Else:
-        Shift mask and metadata 1 bit to the left
+        Shift mask and metadata 11 bits to the left
+        Add slice id metadata
+    Add match on slice id metadata
 
   Send packet(s)
 ```
@@ -378,13 +377,13 @@ If table-id=0:
   Else:
     Log packet, print error
 Else:
-  Figure out what slice generated this error via table-id
+  Figure out what slice generated this error via metadata
 
   Rewrite table-id in packet
 
   Scan match fields:
     If match=metadata:
-      Shift metadata value right (no need to remove if metadata is now 0, optional OXM TLV can be included)
+      Shift metadata value right 11 bits (no need to remove if metadata is now 0, optional OXM TLV can be included)
     If match=in-port:
       Rewrite in port to virtual port
     If match=physical-in-port:
@@ -398,7 +397,7 @@ Else:
   Send packet to tenant controller
 ```
 
-TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking the the PBB tag.
+TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking at the PBB tag or the port.
 
 The buffer-id maps do not need to be maintained since if the buffer doesn't exist anymore on the switch is the error message just forwarded back to the tenant.
 If a buffer-id would be re-used by a switch is the entry deleted from all virtual switches and does the PacketOut return an error from the Hypervisor.
@@ -411,8 +410,9 @@ Make sure that stays consistent.
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
 ### PortStatus
+Update set of ports appropriately (add/remove/modify)
 
-Figure out what virtual ports are affected.
+Figure out what virtual ports are affected, send those tenants appropriate PortStatus messages.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
@@ -435,16 +435,13 @@ The algorithm executed is:
 ```
 global counter = 0;
 
-Repeat:
-  For each physical switch:
-    If port counter exists:
-      Send packet over port
+For each physical switch:
+  Repeat:
+    Send packet over port counter
 
-  counter += 1
-  if counter=max(ports)
-    counter = 0
+    counter = (counter+1)%max(ports)
 
-  wait period/max(ports)
+    wait period/max(ports)
 ```
 
 This is just a barebone version of topology discovery.
@@ -474,6 +471,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - Map to lookup physical switch via datapath-id
 
 ## Per slice
+ - Slice id
  - Maximum rate
 
 ## Per virtual switch
@@ -488,6 +486,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
 ## Per physical switch
  - n-buffers
  - n-tables
+ - Set of ports (count port status)
  - capabilities (only IP_REASM is currently used)
  - fragmentation-flags (ask via GetConfig)
  - miss-send-len (ask via GetConfig)
@@ -500,29 +499,38 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - For all other physical switches, on what port to route packets
  - All virtual switches depending on this physical switch
 
-## Async request filter
-The asynchronous request filter saves per controller what unsollicited messages they want to receive.
-
 # Events to handle
 This section discusses some event that may happen that aren't directly openflow messages.
 
 ## New switch connection
- - Send port-up messages for all virtual ports on this switch
- - Rerun routing algorithm, update all routes
+ - Send Hello message
+ - Send FeatureRequest message
+ - Send GetConfig message
+ - Send updated PortStatus messages for all virtual ports on this switch that are now online
 
 ## Lost switch connection
  - Send port-down messages for all virtual ports on this switch
  - Rerun routing algorithm, update all routes
 
 ## New controller connection
+ - Send Hello message
+ - Send PortStatus messages for all virtual ports with their current state
 
 ## Lost controller connection
+TODO Remove the rules pushed to physical switches?
 
-## New link found via topology discovery
-
-## Link lost detected via topology discovery
- - Send port-down messages for all virtual ports using either link port
- - Rerun routing algorithm, update all routes
+## Link lost/found detected via topology discovery
+```
+Compute new all-to-all routing via floyd-warshall
+For each virtual switch:
+  Check if all depended on physical switch is online and can reach any specific switch
+  If so:
+    For each depended on physical switch:
+      Add slice specific forwarding rules
+    Make virtual switch live
+  Else:
+    Make virtual switch down
+```
 
 # Notes
 Let all xid live in the system for a while so you know to what tenant to forward an error when you get 1
@@ -532,5 +540,12 @@ If an error exists in those messages how to make sure the tenant only receives 1
 What to do with messages that get accepted by only a subset of all the switches?
 
 Need a way to easily lookup physical switches by datapath id
+
+Abilities needed:
+ - Lookup if all virtual switches that depend on a physical switch with a certain dpid, dpid -> {virtual-switch, virtual-switch, ...}
+
+No personal tables, just match on metadata
+
+A virtual switch only comes online after all physical switches it depends on are online and can route to each other, it goes offline again if a physical switch or route disappears.
 
 TODO Remove this section

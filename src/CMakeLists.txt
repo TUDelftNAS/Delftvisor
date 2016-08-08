@@ -20,6 +20,3 @@ find_package(Boost
 )
 include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${Boost_LIBRARIES})
-
-message(STATUS ${Boost_LIBRARIES})
-message(STATUS ${LibFluid_LIBRARIES})

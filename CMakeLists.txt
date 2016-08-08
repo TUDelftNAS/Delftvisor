@@ -19,4 +19,3 @@ set(LibFluid_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/libfluid_build/include)
 set(LibFluid_LIBRARIES ${CMAKE_BINARY_DIR}/libfluid_build/lib/libfluid_msg.so)
 
 add_subdirectory(src)
-add_subdirectory(tests)
