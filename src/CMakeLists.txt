@@ -16,7 +16,10 @@ target_link_libraries(hypervisor ${LibFluid_LIBRARIES})
 find_package(Boost
 	1.58.0
 	REQUIRED
-	system program_options thread
+	system program_options thread log
 )
 include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${Boost_LIBRARIES})
+
+# Needed to get boost log to compile
+add_definitions(-DBOOST_LOG_DYN_LINK)

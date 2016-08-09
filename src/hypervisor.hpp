@@ -34,7 +34,7 @@ private:
 	/// When a new switch connects
 	void handle_accept(
 		const boost::system::error_code& error,
-		PhysicalSwitch::pointer physical_switch);
+		boost::shared_ptr<boost::asio::ip::tcp::socket> socket);
 
 	/// Start listening for physical switch connections
 	void start_listening( int port );

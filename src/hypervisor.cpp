@@ -5,6 +5,8 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/bind.hpp>
+#include <boost/log/trivial.hpp>
+#include <boost/make_shared.hpp>
 
 Hypervisor::Hypervisor( boost::asio::io_service& io ) :
 	signals(io, SIGINT, SIGTERM),
@@ -16,35 +18,39 @@ void Hypervisor::handle_signals(
 	int signal_number
 ) {
 	if( !error ) {
+		BOOST_LOG_TRIVIAL(trace) << "Received signal " << signal_number;
 		stop();
+	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << "Error while receiving signal: " << error.message();
 	}
 }
 
 void Hypervisor::start_accept() {
-	PhysicalSwitch::pointer new_physical_switch = PhysicalSwitch::create(switch_acceptor.get_io_service());
+	boost::shared_ptr<boost::asio::ip::tcp::socket> new_socket = boost::make_shared<boost::asio::ip::tcp::socket>(switch_acceptor.get_io_service());
 
 	switch_acceptor.async_accept(
-		new_physical_switch->get_socket(),
+		*new_socket,
 		boost::bind(
 			&Hypervisor::handle_accept,
 			this,
 			boost::asio::placeholders::error,
-			new_physical_switch));
+			new_socket));
 }
 
-void Hypervisor::handle_accept( const boost::system::error_code& error, PhysicalSwitch::pointer physical_switch ) {
+void Hypervisor::handle_accept( const boost::system::error_code& error, boost::shared_ptr<boost::asio::ip::tcp::socket> socket ) {
 	if( !error ) {
 		// Add the physical switch to the list
-		new_physical_switches.push_back( physical_switch );
+		new_physical_switches.emplace_back( boost::make_shared<PhysicalSwitch>(*socket) );
 
 		// And start the physical switch
-		physical_switch->start();
+		new_physical_switches.back()->start();
 
 		// Start waiting for the next connection
 		start_accept();
 	}
 	else {
-		std::cerr << "Something went wrong while accepting a connection: " << error.message() << std::endl;
+		BOOST_LOG_TRIVIAL(error) << "Something went wrong while accepting a connection: " << error.message();
 	}
 }
 
@@ -64,7 +70,7 @@ void Hypervisor::start() {
 }
 
 void Hypervisor::stop() {
-	std::cout << "Stopping Hypervisor" << std::endl;
+	BOOST_LOG_TRIVIAL(trace) << "Stopping Hypervisor";
 
 	// Cancel the signal handler if it is still running
 	signals.cancel();
@@ -103,7 +109,6 @@ void Hypervisor::load_configuration( std::string filename ) {
 	start_listening(config_tree.get<int>("switch_endpoint_port"));
 
 	// Create the internal structure
-	/*
 	for( const auto &slice_pair : config_tree.get_child("slices") ) {
 		auto slice_ptree = slice_pair.second;
 
@@ -132,5 +137,4 @@ void Hypervisor::load_configuration( std::string filename ) {
 			}
 		}
 	}
-	*/
 }

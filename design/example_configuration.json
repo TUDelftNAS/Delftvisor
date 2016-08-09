@@ -1,10 +1,10 @@
 {
-	"switch_endpoint_port" : 3355,
+	"switch_endpoint_port" : 6633,
 	"slices" : [
 		{
 			"controller" : {
 				"ip"   : "127.0.0.1",
-				"port" : 3353
+				"port" : 5846
 			},
 			"max_rate"         : 500,
 			"virtual_switches" : [
