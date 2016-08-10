@@ -77,9 +77,11 @@ void Hypervisor::unregister_physical_switch(uint64_t datapath_id, int switch_id)
 	physical_switches.erase(switch_id);
 }
 
-boost::weak_ptr<PhysicalSwitch> Hypervisor::get_physical_by_datapath_id(uint64_t datapath_id) {
-	return boost::weak_ptr<PhysicalSwitch>(
-			physical_switches[datapath_id_to_switch_id[datapath_id]] );
+PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) {
+	return physical_switches[switch_id];
+}
+PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(uint64_t datapath_id) {
+	return physical_switches[datapath_id_to_switch_id[datapath_id]];
 }
 
 void Hypervisor::start() {
@@ -116,6 +118,29 @@ void Hypervisor::stop() {
 	for( Slice s : slices ) s.stop();
 	// and delete all the virtual switch shared pointers
 	slices.clear();
+}
+
+void Hypervisor::calculate_routes() {
+	// Reset all switches to start values
+	for( auto phy_switch : physical_switches ) {
+		phy_switch.second->reset_distances();
+	}
+
+	// Execute the floyd-warshall algorithm, naming convention taken
+	// from https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm
+	for( auto k : physical_switches ) {
+		for( auto i : physical_switches ) {
+			for( auto j : physical_switches ) {
+				int dist_i_k = i.second->get_distance(k.first);
+				int dist_k_j = k.second->get_distance(j.first);
+				int dist_i_j = i.second->get_distance(j.first);
+				if( dist_i_k + dist_k_j < dist_i_j ) {
+					i.second->set_distance( j.first, dist_i_k + dist_i_j );
+					i.second->set_next( j.first, i.second->get_distance(k.first) );
+				}
+			}
+		}
+	}
 }
 
 void Hypervisor::start_listening( int port ) {

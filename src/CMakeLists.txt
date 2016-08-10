@@ -7,7 +7,8 @@ add_executable(hypervisor
 	slice.cpp
 	virtual_switch.cpp
 	physical_switch.cpp
-	openflow_connection.cpp)
+	openflow_connection.cpp
+	discoveredlink.cpp)
 
 include_directories(${LibFluid_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${LibFluid_LIBRARIES})
@@ -22,4 +23,4 @@ include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${Boost_LIBRARIES})
 
 # Needed to get boost log to compile
-add_definitions(-DBOOST_LOG_DYN_LINK)
+add_definitions(-DBOOST_LOG_DYN_LINK -g)

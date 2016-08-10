@@ -8,6 +8,7 @@
 
 #include "openflow_connection.hpp"
 
+class DiscoveredLink;
 class VirtualSwitch;
 class Hypervisor;
 
@@ -15,8 +16,7 @@ class Hypervisor;
 struct PhysicalPort {
 	/// The virtual switches that depend on this port
 	std::vector<boost::weak_ptr<VirtualSwitch>> dependent_virtual_switches;
-	/// If we already offically have been told about this port
-	bool found;
+	boost::shared_ptr<DiscoveredLink> link;
 	/// The data concerning this port
 	fluid_msg::of13::Port port_data;
 };
@@ -59,6 +59,11 @@ private:
 	/// Send the next topology discovery message
 	void send_topology_discovery_message();
 
+	/// The distance from this switch to other switches (switch_id -> distance)
+	std::unordered_map<int,int> dist;
+	/// To what port to forward traffic to get to a switch (switch_id -> port_number)
+	std::unordered_map<int,uint32_t> next;
+
 public:
 	/// The constructor
 	PhysicalSwitch(
@@ -76,6 +81,21 @@ public:
 	/// Stop this switch
 	void stop();
 
+	/// Reset the link on a specific port
+	void reset_link(uint32_t port_number);
+
+	/// Reset all the floyd-warshall data to begin state
+	void reset_distances();
+	/// Get the known distance to a switch
+	int get_distance(int switch_id);
+	/// Set a new distance to a switch
+	void set_distance(int switch_id, int distance);
+	/// Get the port to forward traffic over to get to a switch
+	uint32_t get_next(int switch_id);
+	/// Set the port to forward traffic over to get to a switch
+	void set_next(int switch_id, uint32_t port_number);
+
+	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);
 	void handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message);
 	void handle_features_reply  (fluid_msg::of13::FeaturesReply& features_reply_message);

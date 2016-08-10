@@ -25,8 +25,6 @@ private:
 	std::unordered_map<int,PhysicalSwitch::pointer> physical_switches;
 	/// A map from datapath id to switch id
 	std::unordered_map<int64_t,int> datapath_id_to_switch_id;
-	/// Get a pointer to a physical switch via the datapath id
-	boost::weak_ptr<PhysicalSwitch> get_physical_by_datapath_id(uint64_t datapath_id);
 
 	/// A signal has been received
 	void handle_signals(
@@ -48,19 +46,24 @@ public:
 	/// Construct a new hypervisor object
 	Hypervisor( boost::asio::io_service& io );
 
-	/// Lookup a physical switch by datapath_id
-	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(int64_t datapath_id);
-
 	/// Start running the hypervisor
 	void start();
 	/// Stop running the hypervisor
 	void stop();
+
+	/// Lookup a physical switch by switch id
+	PhysicalSwitch::pointer get_physical_switch(int switch_id);
+	/// Lookup a physical switch by datapath_id
+	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(uint64_t datapath_id);
 
 	/// Register a physical switch
 	void register_physical_switch(uint64_t datapath_id,int switch_id);
 	/// Unregister a physical switch
 	void unregister_physical_switch(int switch_id);
 	void unregister_physical_switch(uint64_t datapath_id,int switch_id);
+
+	/// Run the floyd-warshall algorithm on the known topology
+	void calculate_routes();
 
 	/// Load configuration from file
 	void load_configuration( std::string filename );

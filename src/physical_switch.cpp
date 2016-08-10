@@ -44,7 +44,31 @@ void PhysicalSwitch::stop() {
 		hypervisor->unregister_physical_switch(features.datapath_id,id);
 	}
 
+	// TODO Send PortStatus updates to controllers
+
 	BOOST_LOG_TRIVIAL(info) << *this << " stopped";
+}
+
+void PhysicalSwitch::reset_link(uint32_t port_number) {
+	ports[port_number].link.reset();
+}
+
+void PhysicalSwitch::reset_distances() {
+	dist.clear();
+	next.clear();
+	//TODO loop over links
+}
+int PhysicalSwitch::get_distance(int switch_id) {
+	return dist[switch_id];
+}
+void PhysicalSwitch::set_distance(int switch_id, int distance) {
+	dist[switch_id] = distance;
+}
+uint32_t PhysicalSwitch::get_next(int switch_id) {
+	return next[switch_id];
+}
+void PhysicalSwitch::set_next(int switch_id, uint32_t port_number) {
+	next[switch_id] = port_number;
 }
 
 PhysicalSwitch::pointer PhysicalSwitch::shared_from_this() {
@@ -139,13 +163,13 @@ void PhysicalSwitch::handle_port_status(fluid_msg::of13::PortStatus& port_status
 			}
 			else {
 				// Mark this port down
-				ports[port_number].found = false;
+				//ports[port_number].found = false;
 			}
 		}
-		else if(ports[port_number].found) {
+		/*else if(ports[port_number].found) {
 			// Make this a modify message
 			port_status_message.reason(fluid_msg::of13::OFPPR_MODIFY);
-		}
+		}*/
 	}
 
 	// Loop over the depended switches and make them check again
