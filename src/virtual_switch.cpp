@@ -8,7 +8,8 @@
 VirtualSwitch::VirtualSwitch(boost::asio::io_service& io, int64_t datapath_id, Slice *slice) :
 	OpenflowConnection::OpenflowConnection(io),
 	datapath_id(datapath_id),
-	slice(slice) {
+	slice(slice),
+	state(down) {
 }
 
 void VirtualSwitch::try_connect() {
@@ -20,18 +21,44 @@ void VirtualSwitch::try_connect() {
 			boost::asio::placeholders::error));
 }
 
-void VirtualSwitch::handle_connect( const boost::system::error_code& error ) {
+void VirtualSwitch::handle_connect(const boost::system::error_code& error) {
 	if( !error ) {
 		OpenflowConnection::start();
+
+		state = connected;
 
 		BOOST_LOG_TRIVIAL(info) << *this << " got connected";
 
 		// Send PortStatus messages for each port
+		for( VirtualPort port : ports ) {
+		}
 	}
 	else {
 		// Try connecting again?
 		try_connect();
 	}
+}
+
+void VirtualSwitch::start() {
+	if( state==down ) {
+		BOOST_LOG_TRIVIAL(info) << *this << " started";
+		state = try_connecting;
+		try_connect();
+	}
+}
+
+void VirtualSwitch::stop() {
+	if( state!=down ) {
+		OpenflowConnection::stop();
+		// socket.cancel()
+		socket.close();
+
+		state = down;
+	}
+}
+
+bool VirtualSwitch::is_connected() {
+	return state==connected;
 }
 
 void VirtualSwitch::check_online() {
@@ -56,26 +83,11 @@ void VirtualSwitch::check_online() {
 	}
 
 	// Update this virtual switch state if needed
-	if( all_online_and_reachable && !socket.is_open() ) {
+	if( all_online_and_reachable && state==down ) {
 		start();
 	}
-	else if(!all_online_and_reachable && socket.is_open() ) {
+	else if(!all_online_and_reachable && state!=down ) {
 		stop();
-	}
-}
-
-void VirtualSwitch::start() {
-	if( !socket.is_open() ) {
-		BOOST_LOG_TRIVIAL(info) << "Started " << *this;
-		try_connect();
-	}
-}
-
-void VirtualSwitch::stop() {
-	if( socket.is_open() ) {
-		OpenflowConnection::stop();
-		// socket.cancel()
-		socket.close();
 	}
 }
 

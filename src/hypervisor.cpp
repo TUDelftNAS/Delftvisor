@@ -10,7 +10,8 @@
 
 Hypervisor::Hypervisor( boost::asio::io_service& io ) :
 	signals(io, SIGINT, SIGTERM),
-	switch_acceptor(io) {
+	switch_acceptor(io),
+	next_physical_switch_id(0) {
 }
 
 void Hypervisor::handle_signals(
@@ -38,13 +39,23 @@ void Hypervisor::start_accept() {
 			new_socket));
 }
 
-void Hypervisor::handle_accept( const boost::system::error_code& error, boost::shared_ptr<boost::asio::ip::tcp::socket> socket ) {
+void Hypervisor::handle_accept(
+		const boost::system::error_code& error,
+		boost::shared_ptr<boost::asio::ip::tcp::socket> socket) {
 	if( !error ) {
+		// Calculate the next switch id
+		int id = next_physical_switch_id++;
+
 		// Add the physical switch to the list
-		new_physical_switches.emplace_back( boost::make_shared<PhysicalSwitch>(*socket) );
+		physical_switches.emplace(
+			id,
+			boost::make_shared<PhysicalSwitch>(
+				*socket,
+				id,
+				this));
 
 		// And start the physical switch
-		new_physical_switches.back()->start();
+		physical_switches[id]->start();
 
 		// Start waiting for the next connection
 		start_accept();
@@ -52,6 +63,23 @@ void Hypervisor::handle_accept( const boost::system::error_code& error, boost::s
 	else {
 		BOOST_LOG_TRIVIAL(error) << "Something went wrong while accepting a connection: " << error.message();
 	}
+}
+
+void Hypervisor::register_physical_switch(uint64_t datapath_id, int switch_id) {
+	datapath_id_to_switch_id[datapath_id] = switch_id;
+}
+
+void Hypervisor::unregister_physical_switch(int switch_id) {
+	physical_switches.erase(switch_id);
+}
+void Hypervisor::unregister_physical_switch(uint64_t datapath_id, int switch_id) {
+	datapath_id_to_switch_id.erase(datapath_id);
+	physical_switches.erase(switch_id);
+}
+
+boost::weak_ptr<PhysicalSwitch> Hypervisor::get_physical_by_datapath_id(uint64_t datapath_id) {
+	return boost::weak_ptr<PhysicalSwitch>(
+			physical_switches[datapath_id_to_switch_id[datapath_id]] );
 }
 
 void Hypervisor::start() {
@@ -80,9 +108,9 @@ void Hypervisor::stop() {
 	switch_acceptor.close();
 
 	// Stop all physical switches
-	for( auto s : new_physical_switches ) s->stop();
+	for( auto s : physical_switches ) s.second->stop();
 	// and delete the shared pointers
-	new_physical_switches.clear();
+	physical_switches.clear();
 
 	// Stop all of the slices
 	for( Slice s : slices ) s.stop();

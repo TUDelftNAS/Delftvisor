@@ -12,14 +12,26 @@
 
 class OpenflowConnection : public boost::enable_shared_from_this<OpenflowConnection> {
 private:
+	/// Handle errors during network operations
+	void handle_network_error( const boost::system::error_code& error );
+
 	/// The vector that stores new messages
 	std::vector<uint8_t> message_buffer;
 	/// Setup the wait to receive a message
 	void start_receive_message();
 	/// Receive the header of the openflow message
-	void receive_header( const boost::system::error_code& error, std::size_t bytes_transferred );
+	void receive_header(
+		const boost::system::error_code& error,
+		std::size_t bytes_transferred);
 	/// Receive the body of the openflow message
-	void receive_body(const boost::system::error_code& error, std::size_t bytes_transferred);
+	void receive_body(
+		const boost::system::error_code& error,
+		std::size_t bytes_transferred);
+	/// Parse a specific libfluid message
+	template<
+		class libfluid_message,
+		void (OpenflowConnection::*handle_function)(libfluid_message&)>
+	inline void receive_message();
 
 	// TODO Look at http://www.boost.org/doc/libs/1_58_0/doc/html/atomic/usage_examples.html#boost_atomic.usage_examples.mp_queue , it does multi-producer 1 consumer queue without locks
 	/// The mutex that protects the message queue
@@ -100,11 +112,12 @@ protected:
 	OpenflowConnection(boost::asio::io_service& io);
 	/// Construct a new openflow connection from an existing socket
 	OpenflowConnection(boost::asio::ip::tcp::socket& socket);
+
 public:
 	/// Start receiving and pinging this connection
-	void start();
+	virtual void start();
 	/// Stop receiving and pinging this connection
-	void stop();
+	virtual void stop();
 
 	/// Send an openflow message over this connection
 	// TODO Change type to libfluid message

@@ -9,6 +9,7 @@
 #include "openflow_connection.hpp"
 
 class VirtualSwitch;
+class Hypervisor;
 
 /// Represents a port on this switch as it is in the network below
 struct PhysicalPort {
@@ -22,8 +23,29 @@ struct PhysicalPort {
 
 class PhysicalSwitch : public OpenflowConnection {
 private:
-	/// The datapath id of this switch
-	int64_t datapath_id;
+	/// The internal id used for routing
+	int id;
+
+	/// The hypervisor this physical switch belongs to
+	Hypervisor* hypervisor;
+
+	/// The current state of this switch
+	enum {
+		unregistered,
+		registered
+	} state;
+
+	struct {
+		/// The data in a features message
+		int64_t datapath_id;
+		uint32_t n_buffers;
+		uint8_t n_tables;
+		uint32_t capabilities;
+		/// The data in a get_config message
+		uint16_t flags;
+		uint16_t miss_send_len;
+	} features;
+
 	/// The ports attached to this switch, port_id -> port
 	std::unordered_map<uint32_t,PhysicalPort> ports;
 
@@ -39,7 +61,10 @@ private:
 
 public:
 	/// The constructor
-	PhysicalSwitch(boost::asio::ip::tcp::socket& socket);
+	PhysicalSwitch(
+			boost::asio::ip::tcp::socket& socket,
+			int id,
+			Hypervisor* hypervisor);
 
 	typedef boost::shared_ptr<PhysicalSwitch> pointer;
 

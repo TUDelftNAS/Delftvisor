@@ -1,29 +1,55 @@
 #include "physical_switch.hpp"
 #include "virtual_switch.hpp"
+#include "hypervisor.hpp"
 
 #include <boost/log/trivial.hpp>
 
-PhysicalSwitch::PhysicalSwitch(boost::asio::ip::tcp::socket& socket) :
-	OpenflowConnection::OpenflowConnection(socket),
-	topology_discovery_timer(socket.get_io_service()) {
+PhysicalSwitch::PhysicalSwitch(
+		boost::asio::ip::tcp::socket& socket,
+		int id,
+		Hypervisor* hypervisor)
+	:
+		OpenflowConnection::OpenflowConnection(socket),
+		topology_discovery_timer(socket.get_io_service()),
+		id(id),
+		hypervisor(hypervisor),
+		state(unregistered) {
+	if( id >= 4096 ) {
+		BOOST_LOG_TRIVIAL(fatal) << "Ran out of switch id's";
+		// Crash or something?
+	}
+	// Set this one here already because the value is printed
+	features.datapath_id = 0;
 }
 
 void PhysicalSwitch::start() {
 	// Start up the generic connection handling
 	OpenflowConnection::start();
 
-	BOOST_LOG_TRIVIAL(info) << "Started " << *this;
+	// Send an featuresrequest
+	fluid_msg::of13::FeaturesRequest features_message(get_next_xid());
+	send_message( features_message );
+
+	BOOST_LOG_TRIVIAL(info) << *this << " started";
 }
 
 void PhysicalSwitch::stop() {
 	// Stop the generic connection handling
 	OpenflowConnection::stop();
 
-	BOOST_LOG_TRIVIAL(info) << "Stopped " << *this;
+	if( state == unregistered ) {
+		hypervisor->unregister_physical_switch(id);
+	}
+	else {
+		hypervisor->unregister_physical_switch(features.datapath_id,id);
+	}
+
+	BOOST_LOG_TRIVIAL(info) << *this << " stopped";
 }
 
 PhysicalSwitch::pointer PhysicalSwitch::shared_from_this() {
-	return boost::static_pointer_cast<PhysicalSwitch>(OpenflowConnection::shared_from_this());
+	return boost::static_pointer_cast<PhysicalSwitch>(
+			OpenflowConnection::shared_from_this());
 }
 
 void PhysicalSwitch::handle_error(fluid_msg::of13::Error& error_message) {
@@ -35,7 +61,18 @@ void PhysicalSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& f
 }
 void PhysicalSwitch::handle_features_reply(fluid_msg::of13::FeaturesReply& features_reply_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received features_reply";
-	// TODO
+
+	if( state == registered ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " received features_reply while already registered";
+	}
+
+	features.datapath_id  = features_reply_message.datapath_id();
+	features.n_buffers    = features_reply_message.n_buffers();
+	features.n_tables     = features_reply_message.n_tables();
+	features.capabilities = features_reply_message.capabilities();
+
+	hypervisor->register_physical_switch(features.datapath_id,id);
+	state = registered;
 }
 
 void PhysicalSwitch::handle_config_request(fluid_msg::of13::GetConfigRequest& config_request_message) {
@@ -43,7 +80,9 @@ void PhysicalSwitch::handle_config_request(fluid_msg::of13::GetConfigRequest& co
 }
 void PhysicalSwitch::handle_config_reply(fluid_msg::of13::GetConfigReply& config_reply_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received get_config_reply";
-	// TODO
+
+	features.flags         = config_reply_message.flags();
+	features.miss_send_len = config_reply_message.flags();
 }
 void PhysicalSwitch::handle_set_config(fluid_msg::of13::SetConfig& set_config_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received set_config it shouldn't";
@@ -54,7 +93,12 @@ void PhysicalSwitch::handle_barrier_request(fluid_msg::of13::BarrierRequest& bar
 }
 void PhysicalSwitch::handle_barrier_reply(fluid_msg::of13::BarrierReply& barrier_reply_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received barrier_reply";
+
 	// TODO
+	// Figure out who requested this
+	// Mark this switch as done
+	// If all physical switches are done
+	//   send BarrierReply
 }
 
 void PhysicalSwitch::handle_packet_in(fluid_msg::of13::PacketIn& packet_in_message) {
@@ -161,5 +205,5 @@ void PhysicalSwitch::handle_set_async(fluid_msg::of13::SetAsync& set_async_messa
 }
 
 void PhysicalSwitch::print_to_stream(std::ostream& os) const {
-	os << "[PhysicalSwitch " << datapath_id << "]";
+	os << "[PhysicalSwitch id=" << id << ", dpid=" << features.datapath_id << "]";
 }

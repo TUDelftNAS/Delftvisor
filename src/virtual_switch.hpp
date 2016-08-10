@@ -20,6 +20,13 @@ private:
 	/// The datpath id of this switch
 	int64_t datapath_id;
 
+	/// The current state of this switch connection
+	enum {
+		down,
+		try_connecting,
+		connected
+	} state;
+
 	/// The virtual ports on this switch
 	std::vector<VirtualPort> ports;
 
@@ -52,8 +59,10 @@ public:
 	void start();
 	/// Stop the controller connection of this virtual switch
 	void stop();
+	/// Returns if this switch is currently connected
+	bool is_connected();
 
-	void handle_error(fluid_msg::of13::Error& error_message);
+	void handle_error           (fluid_msg::of13::Error& error_message);
 	void handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message);
 	void handle_features_reply  (fluid_msg::of13::FeaturesReply& features_reply_message);
 
@@ -68,7 +77,7 @@ public:
 	void handle_packet_out(fluid_msg::of13::PacketOut& packet_out_message);
 
 	void handle_flow_removed(fluid_msg::of13::FlowRemoved& flow_removed_message);
-	void handle_port_status(fluid_msg::of13::PortStatus& port_status_message);
+	void handle_port_status (fluid_msg::of13::PortStatus& port_status_message);
 
 	void handle_flow_mod (fluid_msg::of13::FlowMod& flow_mod_message);
 	void handle_group_mod(fluid_msg::of13::GroupMod& group_mod_message);
