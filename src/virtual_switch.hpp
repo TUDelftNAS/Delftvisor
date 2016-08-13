@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <unordered_map>
 
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
@@ -8,17 +8,18 @@
 #include "openflow_connection.hpp"
 
 class PhysicalSwitch;
+class Hypervisor;
 class Slice;
 
 struct VirtualPort {
-	PhysicalSwitch* physical_switch;
-	int port_number;
+	uint64_t datapath_id;
+	uint32_t port_number;
 };
 
 class VirtualSwitch : public OpenflowConnection {
 private:
 	/// The datpath id of this switch
-	int64_t datapath_id;
+	uint64_t datapath_id;
 
 	/// The current state of this switch connection
 	enum {
@@ -28,7 +29,10 @@ private:
 	} state;
 
 	/// The virtual ports on this switch
-	std::vector<VirtualPort> ports;
+	std::unordered_map<uint32_t,VirtualPort> ports;
+
+	/// The hypervisor this virtual switch belongs to
+	Hypervisor * hypervisor;
 
 	/// The slice this virtual switch belongs to
 	Slice* slice;
@@ -44,7 +48,17 @@ public:
 	pointer shared_from_this();
 
 	/// Create a new virtual switch object
-	VirtualSwitch(boost::asio::io_service& io, int64_t datapath_id, Slice* slice);
+	VirtualSwitch(
+		boost::asio::io_service& io,
+		uint64_t datapath_id,
+		Hypervisor* hypervisor,
+		Slice* slice);
+
+	void add_port(
+		uint32_t port_number,
+		uint64_t physical_datapath_id,
+		uint32_t physical_port_id);
+	void remove_port(uint32_t port_number);
 
 	/// Check if this switch should be started/stopped
 	/**

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <vector>
+#include <set>
 #include <unordered_map>
 
 #include <boost/asio.hpp>
@@ -12,10 +12,18 @@ class DiscoveredLink;
 class VirtualSwitch;
 class Hypervisor;
 
+namespace topology {
+	/// The value used for infinite for floyd-warshall, this value should
+	/// be choosen such that it doesn't overflow when it get's added to
+	/// itself but is also longer than the longest possible path in the
+	/// network.
+	constexpr int infinite = 10000;
+	constexpr int period   = 1000; // The period to send all topology messages in in ms
+}
+
 /// Represents a port on this switch as it is in the network below
 struct PhysicalPort {
-	/// The virtual switches that depend on this port
-	std::vector<boost::weak_ptr<VirtualSwitch>> dependent_virtual_switches;
+	/// If this port has a link to another switch
 	boost::shared_ptr<DiscoveredLink> link;
 	/// The data concerning this port
 	fluid_msg::of13::Port port_data;
@@ -37,7 +45,7 @@ private:
 
 	struct {
 		/// The data in a features message
-		int64_t datapath_id;
+		uint64_t datapath_id;
 		uint32_t n_buffers;
 		uint8_t n_tables;
 		uint32_t capabilities;
@@ -47,7 +55,18 @@ private:
 	} features;
 
 	/// The ports attached to this switch, port_id -> port
-	std::unordered_map<uint32_t,PhysicalPort> ports;
+	std::unordered_map<
+		uint32_t,
+		PhysicalPort> ports;
+	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
+	/**
+	 * This structure is separate since not necessarily already
+	 * found on this switch.
+	 */
+	std::unordered_map<
+		uint32_t,
+		std::set<
+			boost::shared_ptr<VirtualSwitch>>> needed_ports;
 
 	/// The timer that when fired sends a topology discovery packet
 	boost::asio::deadline_timer topology_discovery_timer;
@@ -57,21 +76,41 @@ private:
 	/// Schedule sending a topology discovery message
 	void schedule_topology_discovery_message();
 	/// Send the next topology discovery message
-	void send_topology_discovery_message();
+	void send_topology_discovery_message(const boost::system::error_code& error);
 
 	/// The distance from this switch to other switches (switch_id -> distance)
 	std::unordered_map<int,int> dist;
 	/// To what port to forward traffic to get to a switch (switch_id -> port_number)
 	std::unordered_map<int,uint32_t> next;
 
+	/// Setup the flow table with the static initial rules
+	void create_initial_rules();
+	/// Update the static rules
+	void update_rules();
+
 public:
+	typedef boost::shared_ptr<PhysicalSwitch> pointer;
+
 	/// The constructor
 	PhysicalSwitch(
 			boost::asio::ip::tcp::socket& socket,
 			int id,
 			Hypervisor* hypervisor);
 
-	typedef boost::shared_ptr<PhysicalSwitch> pointer;
+	/// Get id
+	int get_id() const;
+
+	/// Get the ports on this switch
+	const std::unordered_map<uint32_t,PhysicalPort>& get_ports() const;
+
+	/// Register that a virtual switch wants to be notified
+	void register_port_interest(
+		uint32_t port,
+		boost::shared_ptr<VirtualSwitch> switch_pointer);
+	/// Delete a notification interest
+	void remove_port_interest(
+		uint32_t port,
+		boost::shared_ptr<VirtualSwitch> switch_pointer);
 
 	/// Allow creating a shared pointer of this class
 	pointer shared_from_this();

@@ -54,7 +54,7 @@ private:
 	/// Schedule sending an echo message
 	void schedule_echo_message();
 	/// Send an echo request over this connection
-	void send_echo_message();
+	void send_echo_message(const boost::system::error_code& error);
 
 protected:
 	/// The boost socket object

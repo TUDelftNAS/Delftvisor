@@ -4,7 +4,7 @@
 		{
 			"controller" : {
 				"ip"   : "127.0.0.1",
-				"port" : 5846
+				"port" : 6653
 			},
 			"max_rate"         : 500,
 			"virtual_switches" : [

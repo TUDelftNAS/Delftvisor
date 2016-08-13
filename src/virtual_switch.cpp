@@ -2,14 +2,33 @@
 #include <boost/log/trivial.hpp>
 
 #include "slice.hpp"
+#include "hypervisor.hpp"
 #include "virtual_switch.hpp"
 #include "physical_switch.hpp"
 
-VirtualSwitch::VirtualSwitch(boost::asio::io_service& io, int64_t datapath_id, Slice *slice) :
-	OpenflowConnection::OpenflowConnection(io),
-	datapath_id(datapath_id),
-	slice(slice),
-	state(down) {
+VirtualSwitch::VirtualSwitch(
+		boost::asio::io_service& io,
+		uint64_t datapath_id,
+		Hypervisor* hypervisor,
+		Slice *slice)
+	:
+		OpenflowConnection::OpenflowConnection(io),
+		datapath_id(datapath_id),
+		hypervisor(hypervisor),
+		slice(slice),
+		state(down) {
+}
+
+void VirtualSwitch::add_port(
+		uint32_t port_number,
+		uint64_t physical_datapath_id,
+		uint32_t physical_port_id) {
+	ports[port_number].datapath_id = physical_datapath_id;
+	ports[port_number].port_number = physical_port_id;
+}
+
+void VirtualSwitch::remove_port(uint32_t port_number) {
+	ports.erase(port_number);
 }
 
 void VirtualSwitch::try_connect() {
@@ -30,7 +49,8 @@ void VirtualSwitch::handle_connect(const boost::system::error_code& error) {
 		BOOST_LOG_TRIVIAL(info) << *this << " got connected";
 
 		// Send PortStatus messages for each port
-		for( VirtualPort port : ports ) {
+		for( auto port : ports ) {
+			// TODO
 		}
 	}
 	else {
@@ -66,21 +86,37 @@ void VirtualSwitch::check_online() {
 	if( !slice->is_started() ) return;
 
 	bool all_online_and_reachable = true;
-	PhysicalSwitch* first_switch = nullptr;
+	PhysicalSwitch::pointer first_switch = nullptr;
 
-	for( VirtualPort port : ports ) {
+	for( auto port : ports ) {
 		// Lookup the PhysicalSwitch that owns this port
+		auto switch_ptr = hypervisor->get_physical_switch_by_datapath_id(port.second.datapath_id);
+
+		// TODO Make sure the physical switch actually has the
+		// port that is referred to
+
 		// and make sure that switch is online
+		if( switch_ptr == nullptr ) {
+			all_online_and_reachable = false;
+			break;
+		}
 
 		if( first_switch == nullptr ) {
 			// Set the current PhysicalSwitch in the first_switch
 			// variable
+			first_switch = switch_ptr;
 		}
 		else {
 			// Check connectivity between the current PhysicalSwitch
 			// and *first_switch
+			if( first_switch->get_distance(switch_ptr->get_id()) == topology::infinite ) {
+				all_online_and_reachable = false;
+				break;
+			}
 		}
 	}
+
+	BOOST_LOG_TRIVIAL(info) << *this << " checked for online, all_online_and_reachable=" << all_online_and_reachable << " state=" << state;
 
 	// Update this virtual switch state if needed
 	if( all_online_and_reachable && state==down ) {
@@ -92,7 +128,8 @@ void VirtualSwitch::check_online() {
 }
 
 VirtualSwitch::pointer VirtualSwitch::shared_from_this() {
-	return boost::static_pointer_cast<VirtualSwitch>(OpenflowConnection::shared_from_this());
+	return boost::static_pointer_cast<VirtualSwitch>(
+			OpenflowConnection::shared_from_this());
 }
 
 void VirtualSwitch::handle_error(fluid_msg::of13::Error& error_message) {

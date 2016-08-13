@@ -19,7 +19,7 @@ void Hypervisor::handle_signals(
 	int signal_number
 ) {
 	if( !error ) {
-		BOOST_LOG_TRIVIAL(trace) << "Received signal " << signal_number;
+		BOOST_LOG_TRIVIAL(info) << "Received signal " << signal_number;
 		stop();
 	}
 	else {
@@ -60,7 +60,7 @@ void Hypervisor::handle_accept(
 		// Start waiting for the next connection
 		start_accept();
 	}
-	else {
+	else if(error != boost::asio::error::operation_aborted) {
 		BOOST_LOG_TRIVIAL(error) << "Something went wrong while accepting a connection: " << error.message();
 	}
 }
@@ -77,11 +77,31 @@ void Hypervisor::unregister_physical_switch(uint64_t datapath_id, int switch_id)
 	physical_switches.erase(switch_id);
 }
 
-PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) {
-	return physical_switches[switch_id];
+PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) const {
+	auto it = physical_switches.find(switch_id);
+	if( it == physical_switches.end() ) {
+		return nullptr;
+	}
+	else {
+		return it->second;
+	}
 }
-PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(uint64_t datapath_id) {
-	return physical_switches[datapath_id_to_switch_id[datapath_id]];
+PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(uint64_t datapath_id) const {
+	auto it = datapath_id_to_switch_id.find(datapath_id);
+	if( it == datapath_id_to_switch_id.end() ) {
+		return nullptr;
+	}
+	else {
+		return get_physical_switch(it->second);
+	}
+}
+/// Get the physical switches in the hypervisor
+const std::unordered_map<int,PhysicalSwitch::pointer>& Hypervisor::get_physical_switches() const {
+	return physical_switches;
+}
+/// Get slices
+const std::vector<Slice>& Hypervisor::get_slices() const {
+	return slices;
 }
 
 void Hypervisor::start() {
@@ -109,8 +129,16 @@ void Hypervisor::stop() {
 	// cancels all pending operations on the acceptor
 	switch_acceptor.close();
 
-	// Stop all physical switches
-	for( auto s : physical_switches ) s.second->stop();
+	// Stop all physical switches, deleting an entry in
+	// an unordered_map causes all iterators to that
+	// entry to be invalidated, which is why the iterator
+	// is copied and incremented before calling stop.
+	auto it = physical_switches.begin();
+	while( it != physical_switches.end() ) {
+		auto it_tmp = it;
+		++it;
+		it_tmp->second->stop();
+	}
 	// and delete the shared pointers
 	physical_switches.clear();
 
@@ -136,11 +164,17 @@ void Hypervisor::calculate_routes() {
 				int dist_i_j = i.second->get_distance(j.first);
 				if( dist_i_k + dist_k_j < dist_i_j ) {
 					i.second->set_distance( j.first, dist_i_k + dist_i_j );
-					i.second->set_next( j.first, i.second->get_distance(k.first) );
+					i.second->set_next( j.first, i.second->get_next(k.first) );
 				}
 			}
 		}
 	}
+
+	// Let all the virtual switches check if they should go online
+	for( Slice& s : slices ) s.check_online();
+
+	// See if we need to update forwarding rules
+	// TODO
 }
 
 void Hypervisor::start_listening( int port ) {
@@ -168,24 +202,29 @@ void Hypervisor::load_configuration( std::string filename ) {
 		int max_rate   = slice_ptree.get<int>("max_rate");
 		std::string ip = slice_ptree.get_child("controller").get<std::string>("ip");
 		int port       = slice_ptree.get_child("controller").get<int>("port");
-		slices.emplace_back( slices.size(), max_rate, ip, port );
+		slices.emplace_back( slices.size(), max_rate, ip, port, this );
+
+		Slice& slice = slices.back();
 
 		for( const auto &virtual_switch_pair : slice_ptree.get_child("virtual_switches") ) {
 			auto virtual_switch_ptree = virtual_switch_pair.second;
 
-			int64_t datapath_id = virtual_switch_ptree.get<int64_t>("datapath_id");
+			uint64_t datapath_id = virtual_switch_ptree.get<uint64_t>("datapath_id");
+			slice.add_new_virtual_switch(switch_acceptor.get_io_service(), datapath_id);
 
-			slices.back().add_new_virtual_switch(switch_acceptor.get_io_service(), datapath_id);
+			VirtualSwitch::pointer virtual_switch = slice.get_virtual_switch_by_datapath_id(datapath_id);
+			uint32_t port_counter = 1;
 
 			for( const auto &physical_port_pair : virtual_switch_ptree.get_child("physical_ports") ) {
 				auto physical_port_ptree = physical_port_pair.second;
 
-				int64_t other_datapath_id = physical_port_ptree.get<int64_t>("datapath_id");
+				uint64_t other_datapath_id = physical_port_ptree.get<uint64_t>("datapath_id");
 
 				for( const auto &port_pair : physical_port_ptree.get_child("ports") ) {
 					int port = port_pair.second.get<int>("");
 
-					// TODO Add the ports to the virtual switch
+					virtual_switch->add_port(port_counter, other_datapath_id, port);
+					++port_counter;
 				}
 			}
 		}

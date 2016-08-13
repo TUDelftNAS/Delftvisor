@@ -22,6 +22,10 @@ The Hypervisor has to therefor save a map from the virtual id's the slice uses a
 When a slice has exhausted the amount of group tables reserved for it send an error message.
 The same is used for the meter tables.
 
+The Flood port is simulated by creating a group entry per slice on each switch that creates a packet for each port on the virtual switch.
+This can create a lot of traffic over some links that are unnecessary.
+For future work a method can be investigated where a flood message is propagated over a spanning tree and duplicated at each switch according to the amount of ports of that virtual switch that are connected to that switch.
+
 ## Bandwidth isolation
 Each slice should get a guaranteed slice of the bandwidth.
 
@@ -486,10 +490,10 @@ This section lists what data needs to be saved in the Hypervisor to function.
 ## Per physical switch
  - n-buffers
  - n-tables
- - Set of ports (count port status)
  - capabilities (only IP_REASM is currently used)
  - fragmentation-flags (ask via GetConfig)
  - miss-send-len (ask via GetConfig)
+ - Set of ports (count port status)
  - Internal id (for routing)
  - If this switch received an EchoReply on the last EchoRequest
  - Map of created forward group entries (the group-id's of groups that are created that forward traffic to an output port while adding a pbb-tag) to the output port they forward to, group-id -> output-port

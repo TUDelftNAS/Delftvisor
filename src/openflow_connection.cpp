@@ -28,10 +28,10 @@ void OpenflowConnection::handle_network_error(
 		break;
 	case boost::asio::error::connection_aborted:
 	case boost::asio::error::connection_reset:
-	case ::boost::asio::error::eof:
+	case boost::asio::error::eof:
 		// If the other side gives up stop this connection
 		stop();
-		BOOST_LOG_TRIVIAL(error) << *this << " connection was " << error.message();
+		BOOST_LOG_TRIVIAL(trace) << *this << " connection was " << error.message();
 		break;
 	default:
 		BOOST_LOG_TRIVIAL(error) << *this << " has network problem: " << error.message();
@@ -392,15 +392,27 @@ void OpenflowConnection::handle_send_message(
 
 void OpenflowConnection::schedule_echo_message() {
 	// Set the echo timer to fire after a small period
-	echo_timer.expires_at(echo_timer.expires_at() + boost::posix_time::milliseconds(1000));
-	echo_timer.async_wait(boost::bind(&OpenflowConnection::send_echo_message,shared_from_this()));
+	echo_timer.expires_from_now(
+		boost::posix_time::milliseconds(1000));
+	echo_timer.async_wait(
+		boost::bind(
+			&OpenflowConnection::send_echo_message,
+			shared_from_this(),
+			boost::asio::placeholders::error));
 }
 
-void OpenflowConnection::send_echo_message() {
+void OpenflowConnection::send_echo_message(const boost::system::error_code& error) {
 	// If this connection is closed don't send the message
 	// and don't schedule the next message. This connection
 	// has likely been closed.
-	if( !socket.is_open() ) return;
+	if( error.value() == boost::asio::error::operation_aborted ) {
+		BOOST_LOG_TRIVIAL(trace) << *this << " echo timer cancelled";
+		return;
+	}
+	else if( error ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " echo timer error: " << error.message();
+		return;
+	}
 
 	// TODO What to do if the echo wasn't answered?
 	if( !echo_received ) {
@@ -411,7 +423,7 @@ void OpenflowConnection::send_echo_message() {
 	fluid_msg::of13::EchoRequest echo_msg(get_next_xid());
 	send_message(echo_msg);
 	echo_received = false;
-	BOOST_LOG_TRIVIAL(info) << *this << " send echo request";
+	BOOST_LOG_TRIVIAL(trace) << *this << " send echo request";
 
 	// Schedule the next echo message to be send
 	schedule_echo_message();
@@ -459,13 +471,13 @@ void OpenflowConnection::handle_echo_request(
 	// Send the echo reply
 	this->send_message(echo_reply_message);
 
-	BOOST_LOG_TRIVIAL(info) << *this << " responded to echo request";
+	BOOST_LOG_TRIVIAL(trace) << *this << " responded to echo request";
 }
 
 void OpenflowConnection::handle_echo_reply(
 		fluid_msg::of13::EchoReply& echo_reply_message) {
 	echo_received = true;
-	BOOST_LOG_TRIVIAL(info) << *this << " received echo reply";
+	BOOST_LOG_TRIVIAL(trace) << *this << " received echo reply";
 }
 
 void OpenflowConnection::handle_experimenter(

@@ -24,7 +24,7 @@ private:
 	/// The physical switches registered at this hypervisor
 	std::unordered_map<int,PhysicalSwitch::pointer> physical_switches;
 	/// A map from datapath id to switch id
-	std::unordered_map<int64_t,int> datapath_id_to_switch_id;
+	std::unordered_map<uint64_t,int> datapath_id_to_switch_id;
 
 	/// A signal has been received
 	void handle_signals(
@@ -52,9 +52,14 @@ public:
 	void stop();
 
 	/// Lookup a physical switch by switch id
-	PhysicalSwitch::pointer get_physical_switch(int switch_id);
+	PhysicalSwitch::pointer get_physical_switch(int switch_id) const;
 	/// Lookup a physical switch by datapath_id
-	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(uint64_t datapath_id);
+	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(uint64_t datapath_id) const;
+
+	/// Get the physical switches in the hypervisor
+	const std::unordered_map<int,PhysicalSwitch::pointer>& get_physical_switches() const;
+	/// Get slices
+	const std::vector<Slice>& get_slices() const;
 
 	/// Register a physical switch
 	void register_physical_switch(uint64_t datapath_id,int switch_id);
