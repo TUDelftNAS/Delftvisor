@@ -103,7 +103,7 @@ bool parse_arguments(int argc, char* argv[]) {
 		level = boost::log::trivial::fatal;
 	}
 	else {
-		std::cerr << "Unkown log level \"" << log_level << "\"" << std::endl;
+		std::cerr << "Unknown log level \"" << log_level << "\"" << std::endl;
 		return false;
 	}
 	boost::log::core::get()->set_filter(
@@ -125,6 +125,9 @@ bool parse_arguments(int argc, char* argv[]) {
 	if( num_threads < 1 ) {
 		std::cerr << "Amount of threads must be positive" << std::endl;
 		return false;
+	}
+	else if( num_threads > 1 ) {
+		std::cerr << "Using more than 1 threads is still experimental" << std::endl;
 	}
 
 	// Everything went ok
@@ -160,14 +163,16 @@ int main(int argc, char* argv[]) {
 
 	// Create the threads
 	std::vector<boost::thread> threads;
-	for( size_t i=0; i<num_threads; ++i ) {
+	for( size_t i=0; i<(num_threads-1); ++i ) {
 		threads.emplace_back(boost::bind(&boost::asio::io_service::run, &io));
 	}
 
 	BOOST_LOG_TRIVIAL(info) << "Started " << num_threads << " threads";
+	// Also use this thread to service handlers
+	io.run();
 
 	// Join the threads again when all work is done
-	for( size_t i=0; i<num_threads; ++i ) {
+	for( size_t i=0; i<(num_threads-1); ++i ) {
 		threads[i].join();
 	}
 

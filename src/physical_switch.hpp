@@ -21,14 +21,6 @@ namespace topology {
 	constexpr int period   = 1000; // The period to send all topology messages in in ms
 }
 
-/// Represents a port on this switch as it is in the network below
-struct PhysicalPort {
-	/// If this port has a link to another switch
-	boost::shared_ptr<DiscoveredLink> link;
-	/// The data concerning this port
-	fluid_msg::of13::Port port_data;
-};
-
 class PhysicalSwitch : public OpenflowConnection {
 private:
 	/// The internal id used for routing
@@ -54,6 +46,32 @@ private:
 		uint16_t miss_send_len;
 	} features;
 
+	/// The information needed when forwarding a response
+	struct RequestSource {
+		uint32_t original_xid;
+		boost::weak_ptr<VirtualSwitch> virtual_switch;
+	};
+	/// The xid translator
+	std::unordered_map<
+		uint32_t,
+		RequestSource> xid_map;
+	/// Send a message that needs a response
+	/**
+	 * This version stores the original xid this message was
+	 * send with so the response can be forwarded to the appropiate
+	 * virtual switch.
+	 */
+	void send_request_message(
+		fluid_msg::OFMsg& message,
+		boost::weak_ptr<VirtualSwitch> virtual_switch);
+
+	/// Represents a port on this switch as it is in the network below
+	struct PhysicalPort {
+		/// If this port has a link to another switch
+		boost::shared_ptr<DiscoveredLink> link;
+		/// The data concerning this port
+		fluid_msg::of13::Port port_data;
+	};
 	/// The ports attached to this switch, port_id -> port
 	std::unordered_map<
 		uint32_t,
@@ -85,8 +103,6 @@ private:
 
 	/// Setup the flow table with the static initial rules
 	void create_initial_rules();
-	/// Update the static rules
-	void update_rules();
 
 public:
 	typedef boost::shared_ptr<PhysicalSwitch> pointer;
@@ -133,6 +149,9 @@ public:
 	uint32_t get_next(int switch_id);
 	/// Set the port to forward traffic over to get to a switch
 	void set_next(int switch_id, uint32_t port_number);
+
+	/// Update the static rules after the topology has change
+	void update_static_rules();
 
 	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);

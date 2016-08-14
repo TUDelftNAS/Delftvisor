@@ -35,8 +35,12 @@ void DiscoveredLink::timeout(const boost::system::error_code& error) {
 	BOOST_LOG_TRIVIAL(info) << "Link between " << switch_id_1 << " and " << switch_id_2 << " timed out";
 
 	//Delete link from physical switches
-	hypervisor->get_physical_switch(switch_id_1)->reset_link(port_number_1);
-	hypervisor->get_physical_switch(switch_id_2)->reset_link(port_number_2);
+	hypervisor
+		->get_physical_switch(switch_id_1)
+		->reset_link(port_number_1);
+	hypervisor
+		->get_physical_switch(switch_id_2)
+		->reset_link(port_number_2);
 
 	// Recalculate the routes
 	hypervisor->calculate_routes();
@@ -90,7 +94,9 @@ void DiscoveredLink::stop() {
 }
 
 void DiscoveredLink::print_to_stream(std::ostream& os) const {
-	os << "[DiscoveredLink between (" << switch_id_1 << "," << port_number_1 << ") and (" << switch_id_2 << "," << port_number_2 << ")]";
+	os << "[DiscoveredLink between ("
+		<< switch_id_1 << "," << port_number_1 << ") and ("
+		<< switch_id_2 << "," << port_number_2 << ")]";
 }
 
 std::ostream& operator<<(std::ostream& os, const DiscoveredLink& link) {

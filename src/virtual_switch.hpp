@@ -11,11 +11,6 @@ class PhysicalSwitch;
 class Hypervisor;
 class Slice;
 
-struct VirtualPort {
-	uint64_t datapath_id;
-	uint32_t port_number;
-};
-
 class VirtualSwitch : public OpenflowConnection {
 private:
 	/// The datpath id of this switch
@@ -28,6 +23,11 @@ private:
 		connected
 	} state;
 
+	/// A virtual port
+	struct VirtualPort {
+		uint64_t datapath_id;
+		uint32_t port_number;
+	};
 	/// The virtual ports on this switch
 	std::unordered_map<uint32_t,VirtualPort> ports;
 
@@ -54,10 +54,12 @@ public:
 		Hypervisor* hypervisor,
 		Slice* slice);
 
+	/// Add a port to this virtual switch
 	void add_port(
 		uint32_t port_number,
 		uint64_t physical_datapath_id,
 		uint32_t physical_port_id);
+	/// Remove a port from this virtual switch
 	void remove_port(uint32_t port_number);
 
 	/// Check if this switch should be started/stopped
@@ -76,6 +78,7 @@ public:
 	/// Returns if this switch is currently connected
 	bool is_connected();
 
+	/// Handle openflow messages
 	void handle_error           (fluid_msg::of13::Error& error_message);
 	void handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message);
 	void handle_features_reply  (fluid_msg::of13::FeaturesReply& features_reply_message);

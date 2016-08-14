@@ -67,8 +67,10 @@ public:
 	void unregister_physical_switch(int switch_id);
 	void unregister_physical_switch(uint64_t datapath_id,int switch_id);
 
-	/// Run the floyd-warshall algorithm on the known topology
+	/// Run the floyd-warshall algorithm on the known topology in dot format
 	void calculate_routes();
+	/// Print the found topology to an ostream
+	void print_topology(std::ostream& os);
 
 	/// Load configuration from file
 	void load_configuration( std::string filename );

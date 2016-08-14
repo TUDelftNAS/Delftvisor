@@ -27,7 +27,7 @@ int PhysicalSwitch::get_id() const {
 	return id;
 }
 
-const std::unordered_map<uint32_t,PhysicalPort>& PhysicalSwitch::get_ports() const
+const std::unordered_map<uint32_t,PhysicalSwitch::PhysicalPort>& PhysicalSwitch::get_ports() const
 {
 	return ports;
 }
@@ -52,12 +52,15 @@ void PhysicalSwitch::start() {
 	send_message( features_message );
 
 	// Request ports via multipart
-	// TODO
+	fluid_msg::of13::MultipartRequestPortDescription port_description_message(
+		get_next_xid(),
+		0); // The only flag is the more the flag indicating more messages follow
+	send_message( port_description_message );
 
 	// Create the rest of the initial rules
 	create_initial_rules();
 	// Create the dynamic rules
-	update_rules();
+	update_static_rules();
 
 	// Start sending topology discovery messages
 	schedule_topology_discovery_message();
@@ -69,6 +72,7 @@ void PhysicalSwitch::stop() {
 	// Stop the generic connection handling
 	OpenflowConnection::stop();
 
+	// Stop the topology discovery
 	topology_discovery_timer.cancel();
 
 	if( state == unregistered ) {
@@ -137,12 +141,12 @@ void PhysicalSwitch::create_initial_rules() {
 		meter_mod.xid(get_next_xid());
 		meter_mod.command(fluid_msg::of13::OFPMC_ADD);
 		meter_mod.flags(fluid_msg::of13::OFPMF_PKTPS);
-		meter_mod.meter_id(slice.get_id());
+		meter_mod.meter_id(slice.get_id()+1); // TODO Document this better, meter id's start at 1
 		meter_mod.add_band(
 			new fluid_msg::of13::MeterBand(
 				fluid_msg::of13::OFPMBT_DROP,
 				slice.get_max_rate(),
-				1)); // TODO What does burst_size mean?
+				0)); // Burst needs to be 0 unless flag burst is used
 
 		// Send the message
 		send_message(meter_mod);
@@ -151,14 +155,14 @@ void PhysicalSwitch::create_initial_rules() {
 	// Send a barrierrequest
 }
 
-void PhysicalSwitch::update_rules() {
+void PhysicalSwitch::update_static_rules() {
 	// Forward traffic between switches, if a packet comes
 	// in over a link with a connection to another switch
-	for( auto switch_it : hypervisor->get_physical_switches() ) {
+	for( auto& switch_it : hypervisor->get_physical_switches() ) {
 		// Forwarding to this switch makes no sense
 		if( switch_it.first == id ) continue;
 
-		for( auto port_it : ports ) {
+		for( auto& port_it : ports ) {
 			// If this port doesn't have a link continue
 			if( port_it.second.link == nullptr ) continue;
 
@@ -182,7 +186,7 @@ void PhysicalSwitch::update_rules() {
 	}
 
 	// Forward new packets to the personal flowtables
-	for( auto port : needed_ports ) {
+	for( auto& port : needed_ports ) {
 		// Check if the port exists, has a link and
 		// is needed by exactly 1 virtual switch
 		auto it = ports.find(port.first);
@@ -195,64 +199,12 @@ void PhysicalSwitch::update_rules() {
 	}
 }
 
-void PhysicalSwitch::schedule_topology_discovery_message() {
-	// If there are no ports registered yet wait 1 period
-	int wait_time;
-	if( ports.size() == 0 ) {
-		wait_time = topology::period;
-	}
-	else {
-		wait_time = topology::period/ports.size();
-	}
-
-	topology_discovery_timer.expires_from_now(
-		boost::posix_time::milliseconds(wait_time));
-	topology_discovery_timer.async_wait(
-		boost::bind(
-			&PhysicalSwitch::send_topology_discovery_message,
-			shared_from_this(),
-			boost::asio::placeholders::error));
-}
-
-void PhysicalSwitch::send_topology_discovery_message(const boost::system::error_code& error) {
-	if( error.value() == boost::asio::error::operation_aborted ) {
-		BOOST_LOG_TRIVIAL(trace) << *this << " topology discovery timer cancelled";
-		return;
-	}
-	else if( error ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " topology discovery timer error: " << error.message();
-		return;
-	}
-
-	// Figure out what port to send the packet over
-	// Check if the port still exists!
-	// TODO
-
-	// Create the packet out message
-	fluid_msg::of13::PacketOut packet_out;
-	packet_out.xid(get_next_xid());
-	// TODO Create the actual message and put it into the PacketOut
-
-	// Send the message
-	//send_message(packet_out);
-
-	// Schedule the next message
-	schedule_topology_discovery_message();
-}
-
-void PhysicalSwitch::reset_link(uint32_t port_number) {
-	ports[port_number].link.reset();
-	// This function is called when a discovered link times out.
-	// Since both ends of that link has to be removed it doesn't
-	// make sense to do the recalculation of the routes here.
-}
-
 void PhysicalSwitch::reset_distances() {
 	dist.clear();
 	next.clear();
 
 	// Loop over the links and fill the dist and next maps
-	for( auto port : ports ) {
+	for( auto& port : ports ) {
 		if( port.second.link != nullptr ) {
 			int other_switch = port.second.link->get_other_switch_id(id);
 			set_distance(other_switch,1);

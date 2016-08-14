@@ -49,7 +49,7 @@ void VirtualSwitch::handle_connect(const boost::system::error_code& error) {
 		BOOST_LOG_TRIVIAL(info) << *this << " got connected";
 
 		// Send PortStatus messages for each port
-		for( auto port : ports ) {
+		for( auto& port : ports ) {
 			// TODO
 		}
 	}
@@ -88,7 +88,7 @@ void VirtualSwitch::check_online() {
 	bool all_online_and_reachable = true;
 	PhysicalSwitch::pointer first_switch = nullptr;
 
-	for( auto port : ports ) {
+	for( auto& port : ports ) {
 		// Lookup the PhysicalSwitch that owns this port
 		auto switch_ptr = hypervisor->get_physical_switch_by_datapath_id(port.second.datapath_id);
 

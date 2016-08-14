@@ -7,6 +7,7 @@ add_executable(hypervisor
 	slice.cpp
 	virtual_switch.cpp
 	physical_switch.cpp
+	physical_switch_topology.cpp
 	openflow_connection.cpp
 	discoveredlink.cpp)
 

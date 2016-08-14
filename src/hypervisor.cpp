@@ -1,4 +1,5 @@
 #include "hypervisor.hpp"
+#include "discoveredlink.hpp"
 
 #include <iostream>
 
@@ -156,9 +157,9 @@ void Hypervisor::calculate_routes() {
 
 	// Execute the floyd-warshall algorithm, naming convention taken
 	// from https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm
-	for( auto k : physical_switches ) {
-		for( auto i : physical_switches ) {
-			for( auto j : physical_switches ) {
+	for( auto &k : physical_switches ) {
+		for( auto &i : physical_switches ) {
+			for( auto &j : physical_switches ) {
 				int dist_i_k = i.second->get_distance(k.first);
 				int dist_k_j = k.second->get_distance(j.first);
 				int dist_i_j = i.second->get_distance(j.first);
@@ -170,11 +171,33 @@ void Hypervisor::calculate_routes() {
 		}
 	}
 
-	// Let all the virtual switches check if they should go online
+	// Let all the virtual switches check if they should go online/down
 	for( Slice& s : slices ) s.check_online();
 
-	// See if we need to update forwarding rules
-	// TODO
+	// Let all physical switches check if the static forwarding rules need to update
+	for( auto &ps : physical_switches ) ps.second->update_static_rules();
+
+	std::cout << "New topology:" << std::endl;
+	print_topology(std::cout);
+}
+
+void Hypervisor::print_topology(std::ostream& os) {
+	os << "graph {\n";
+	for( const auto &ps : physical_switches ) {
+		int id = ps.second->get_id();
+		os << "\t" << id << " -- { ";
+		for( const auto &p : ps.second->get_ports() ) {
+			if( p.second.link != nullptr ) {
+				int other_id = p.second.link->get_other_switch_id(id);
+				// Only add each link once
+				if( id < other_id ) {
+					os << other_id << " ";
+				}
+			}
+		}
+		os << "}\n";
+	}
+	os << "}\n" << std::flush;
 }
 
 void Hypervisor::start_listening( int port ) {

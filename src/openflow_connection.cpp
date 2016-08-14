@@ -99,7 +99,9 @@ void OpenflowConnection::receive_header(
 	}
 }
 
-template<class libfluid_message,void (OpenflowConnection::*handle_function)(libfluid_message&)>
+template<
+	class libfluid_message,
+	void (OpenflowConnection::*handle_function)(libfluid_message&)>
 void OpenflowConnection::receive_message() {
 	// Try to unpack the message
 	libfluid_message message;
