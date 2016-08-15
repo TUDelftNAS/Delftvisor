@@ -140,6 +140,178 @@ void OpenflowConnection::receive_body(
 	// is stupid long but I couldn't find an function
 	// in libfluid_msg that did it for me.
 	switch( type ) {
+	case fluid_msg::of13::OFPT_MULTIPART_REQUEST:
+		{
+			uint16_t multi_type = 256*message_buffer[8] + message_buffer[9];
+			switch( multi_type ) {
+			case fluid_msg::of13::OFPMP_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartRequestDesc,
+					&OpenflowConnection::handle_multipart_request_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_FLOW:
+				receive_message<
+					fluid_msg::of13::MultipartRequestFlow,
+					&OpenflowConnection::handle_multipart_request_flow>();
+				break;
+			case fluid_msg::of13::OFPMP_AGGREGATE:
+				receive_message<
+					fluid_msg::of13::MultipartRequestAggregate,
+					&OpenflowConnection::handle_multipart_request_aggregate>();
+				break;
+			case fluid_msg::of13::OFPMP_TABLE:
+				receive_message<
+					fluid_msg::of13::MultipartRequestTable,
+					&OpenflowConnection::handle_multipart_request_table>();
+				break;
+			case fluid_msg::of13::OFPMP_PORT_STATS:
+				receive_message<
+					fluid_msg::of13::MultipartRequestPortStats,
+					&OpenflowConnection::handle_multipart_request_port_stats>();
+				break;
+			case fluid_msg::of13::OFPMP_QUEUE:
+				receive_message<
+					fluid_msg::of13::MultipartRequestQueue,
+					&OpenflowConnection::handle_multipart_request_queue>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP:
+				receive_message<
+					fluid_msg::of13::MultipartRequestGroup,
+					&OpenflowConnection::handle_multipart_request_group>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartRequestGroupDesc,
+					&OpenflowConnection::handle_multipart_request_group_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartRequestGroupFeatures,
+					&OpenflowConnection::handle_multipart_request_group_features>();
+				break;
+			case fluid_msg::of13::OFPMP_METER:
+				receive_message<
+					fluid_msg::of13::MultipartRequestMeter,
+					&OpenflowConnection::handle_multipart_request_meter>();
+				break;
+			case fluid_msg::of13::OFPMP_METER_CONFIG:
+				receive_message<
+					fluid_msg::of13::MultipartRequestMeterConfig,
+					&OpenflowConnection::handle_multipart_request_meter_config>();
+				break;
+			case fluid_msg::of13::OFPMP_METER_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartRequestMeterFeatures,
+					&OpenflowConnection::handle_multipart_request_meter_features>();
+				break;
+			case fluid_msg::of13::OFPMP_TABLE_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartRequestTableFeatures,
+					&OpenflowConnection::handle_multipart_request_table_features>();
+				break;
+			case fluid_msg::of13::OFPMP_PORT_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartRequestPortDescription,
+					&OpenflowConnection::handle_multipart_request_port_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_EXPERIMENTER:
+				receive_message<
+					fluid_msg::of13::MultipartRequestExperimenter,
+					&OpenflowConnection::handle_multipart_request_experimenter>();
+				break;
+			default:
+				BOOST_LOG_TRIVIAL(error) << *this << " received unknown multipart request with type " << multi_type;
+				break;
+			}
+		}
+		break;
+
+	case fluid_msg::of13::OFPT_MULTIPART_REPLY:
+		{
+			uint16_t multi_type = 256*message_buffer[8] + message_buffer[9];
+			switch( multi_type ) {
+			case fluid_msg::of13::OFPMP_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartReplyDesc,
+					&OpenflowConnection::handle_multipart_reply_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_FLOW:
+				receive_message<
+					fluid_msg::of13::MultipartReplyFlow,
+					&OpenflowConnection::handle_multipart_reply_flow>();
+				break;
+			case fluid_msg::of13::OFPMP_AGGREGATE:
+				receive_message<
+					fluid_msg::of13::MultipartReplyAggregate,
+					&OpenflowConnection::handle_multipart_reply_aggregate>();
+				break;
+			case fluid_msg::of13::OFPMP_TABLE:
+				receive_message<
+					fluid_msg::of13::MultipartReplyTable,
+					&OpenflowConnection::handle_multipart_reply_table>();
+				break;
+			case fluid_msg::of13::OFPMP_PORT_STATS:
+				receive_message<
+					fluid_msg::of13::MultipartReplyPortStats,
+					&OpenflowConnection::handle_multipart_reply_port_stats>();
+				break;
+			case fluid_msg::of13::OFPMP_QUEUE:
+				receive_message<
+					fluid_msg::of13::MultipartReplyQueue,
+					&OpenflowConnection::handle_multipart_reply_queue>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP:
+				receive_message<
+					fluid_msg::of13::MultipartReplyGroup,
+					&OpenflowConnection::handle_multipart_reply_group>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartReplyGroupDesc,
+					&OpenflowConnection::handle_multipart_reply_group_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_GROUP_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartReplyGroupFeatures,
+					&OpenflowConnection::handle_multipart_reply_group_features>();
+				break;
+			case fluid_msg::of13::OFPMP_METER:
+				receive_message<
+					fluid_msg::of13::MultipartReplyMeter,
+					&OpenflowConnection::handle_multipart_reply_meter>();
+				break;
+			case fluid_msg::of13::OFPMP_METER_CONFIG:
+				receive_message<
+					fluid_msg::of13::MultipartReplyMeterConfig,
+					&OpenflowConnection::handle_multipart_reply_meter_config>();
+				break;
+			case fluid_msg::of13::OFPMP_METER_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartReplyMeterFeatures,
+					&OpenflowConnection::handle_multipart_reply_meter_features>();
+				break;
+			case fluid_msg::of13::OFPMP_TABLE_FEATURES:
+				receive_message<
+					fluid_msg::of13::MultipartReplyTableFeatures,
+					&OpenflowConnection::handle_multipart_reply_table_features>();
+				break;
+			case fluid_msg::of13::OFPMP_PORT_DESC:
+				receive_message<
+					fluid_msg::of13::MultipartReplyPortDescription,
+					&OpenflowConnection::handle_multipart_reply_port_desc>();
+				break;
+			case fluid_msg::of13::OFPMP_EXPERIMENTER:
+				receive_message<
+					fluid_msg::of13::MultipartReplyExperimenter,
+					&OpenflowConnection::handle_multipart_reply_experimenter>();
+				break;
+			default:
+				BOOST_LOG_TRIVIAL(error) << *this << " received unknown multipart request with type " << multi_type;
+				break;
+			}
+		}
+		break;
+
 	case fluid_msg::of13::OFPT_HELLO:
 		receive_message<
 			fluid_msg::of13::Hello,
@@ -264,18 +436,6 @@ void OpenflowConnection::receive_body(
 		receive_message<
 			fluid_msg::of13::MeterMod,
 			&OpenflowConnection::handle_meter_mod>();
-		break;
-
-	case fluid_msg::of13::OFPT_MULTIPART_REQUEST:
-		receive_message<
-			fluid_msg::of13::MultipartRequest,
-			&OpenflowConnection::handle_multipart_request>();
-		break;
-
-	case fluid_msg::of13::OFPT_MULTIPART_REPLY:
-		receive_message<
-			fluid_msg::of13::MultipartReply,
-			&OpenflowConnection::handle_multipart_reply>();
 		break;
 
 	case fluid_msg::of13::OFPT_QUEUE_GET_CONFIG_REQUEST:

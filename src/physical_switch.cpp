@@ -356,13 +356,6 @@ void PhysicalSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_messa
 	BOOST_LOG_TRIVIAL(error) << *this << " received meter_mod it shouldn't";
 }
 
-void PhysicalSwitch::handle_multipart_request(fluid_msg::of13::MultipartRequest& multipart_request_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart_request it shouldn't";
-}
-void PhysicalSwitch::handle_multipart_reply(fluid_msg::of13::MultipartReply& multipart_reply_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart_reply it shouldn't";
-}
-
 void PhysicalSwitch::handle_queue_config_request(fluid_msg::of13::QueueGetConfigRequest& queue_config_request) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received queue_get_config_request it shouldn't";
 }
@@ -385,6 +378,97 @@ void PhysicalSwitch::handle_get_async_reply(fluid_msg::of13::GetAsyncReply& asyn
 }
 void PhysicalSwitch::handle_set_async(fluid_msg::of13::SetAsync& set_async_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received set_async it shouldn't";
+}
+
+void PhysicalSwitch::handle_multipart_request_desc(fluid_msg::of13::MultipartRequestDesc& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_flow(fluid_msg::of13::MultipartRequestFlow& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_aggregate(fluid_msg::of13::MultipartRequestAggregate& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_table(fluid_msg::of13::MultipartRequestTable& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_port_stats(fluid_msg::of13::MultipartRequestPortStats& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_queue(fluid_msg::of13::MultipartRequestQueue& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_group(fluid_msg::of13::MultipartRequestGroup& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_group_desc(fluid_msg::of13::MultipartRequestGroupDesc& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_group_features(fluid_msg::of13::MultipartRequestGroupFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_meter(fluid_msg::of13::MultipartRequestMeter& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_meter_config(fluid_msg::of13::MultipartRequestMeterConfig& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_meter_features(fluid_msg::of13::MultipartRequestMeterFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_table_features(fluid_msg::of13::MultipartRequestTableFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_port_desc(fluid_msg::of13::MultipartRequestPortDescription& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_request_experimenter(fluid_msg::of13::MultipartRequestExperimenter& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_desc(fluid_msg::of13::MultipartReplyDesc& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_flow(fluid_msg::of13::MultipartReplyFlow& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_aggregate(fluid_msg::of13::MultipartReplyAggregate& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_table(fluid_msg::of13::MultipartReplyTable& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_port_stats(fluid_msg::of13::MultipartReplyPortStats& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_queue(fluid_msg::of13::MultipartReplyQueue& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_group(fluid_msg::of13::MultipartReplyGroup& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_group_desc(fluid_msg::of13::MultipartReplyGroupDesc& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::MultipartReplyGroupFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_meter(fluid_msg::of13::MultipartReplyMeter& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_meter_config(fluid_msg::of13::MultipartReplyMeterConfig& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::MultipartReplyMeterFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_table_features(fluid_msg::of13::MultipartReplyTableFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_port_desc(fluid_msg::of13::MultipartReplyPortDescription& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+}
+void PhysicalSwitch::handle_multipart_reply_experimenter(fluid_msg::of13::MultipartReplyExperimenter& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
 }
 
 void PhysicalSwitch::print_to_stream(std::ostream& os) const {
