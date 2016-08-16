@@ -83,18 +83,32 @@ private:
 	 */
 	std::unordered_map<
 		uint32_t,
-		std::set<
-			boost::shared_ptr<VirtualSwitch>>> needed_ports;
+		std::set<boost::shared_ptr<VirtualSwitch>>> needed_ports;
+
+	/// Handle information about a port we received
+	/**
+	 * Two messages contain port information, the PortStatus
+	 * message and the MultipartReplyPortDescription. All the
+	 * port data provided gets handled by this message which
+	 * updates the ports information and updates the virtual
+	 * switches if necessary.
+	 */
+	void handle_port( fluid_msg::of13::Port& port, uint8_t reason );
 
 	/// The timer that when fired sends a topology discovery packet
 	boost::asio::deadline_timer topology_discovery_timer;
 
+	/// Create the flowrule in this switch to forward topology discovery messages
+	void make_topology_discovery_rule();
 	/// The next port to send a topology discovery message over
 	int topology_discovery_port;
 	/// Schedule sending a topology discovery message
 	void schedule_topology_discovery_message();
 	/// Send the next topology discovery message
 	void send_topology_discovery_message(const boost::system::error_code& error);
+	/// Handle a packet in for topology discovery
+	void handle_topology_discovery_packet_in(
+		fluid_msg::of13::PacketIn& packet_in_message);
 
 	/// The distance from this switch to other switches (switch_id -> distance)
 	std::unordered_map<int,int> dist;
@@ -136,8 +150,10 @@ public:
 	/// Stop this switch
 	void stop();
 
-	/// Reset the link on a specific port
-	void reset_link(uint32_t port_number);
+	/// Add a discover link to this physical switch
+	void add_link(boost::shared_ptr<DiscoveredLink> discovered_link);
+	/// Reset a link involving this switch
+	void reset_link(boost::shared_ptr<DiscoveredLink> discovered_link);
 
 	/// Reset all the floyd-warshall data to begin state
 	void reset_distances();

@@ -5,19 +5,19 @@
 #include <boost/log/trivial.hpp>
 
 DiscoveredLink::DiscoveredLink(
-	boost::asio::io_service& io,
-	Hypervisor* hypervisor,
-	int switch_id_1,
-	uint32_t port_number_1,
-	int switch_id_2,
-	uint32_t port_number_2)
-:
-	liveness_timer(io),
-	hypervisor(hypervisor),
-	switch_id_1(switch_id_1),
-	port_number_1(port_number_1),
-	switch_id_2(switch_id_2),
-	port_number_2(port_number_2) {
+		boost::asio::io_service& io,
+		Hypervisor* hypervisor,
+		int switch_id_1,
+		uint32_t port_number_1,
+		int switch_id_2,
+		uint32_t port_number_2)
+	:
+		liveness_timer(io),
+		hypervisor(hypervisor),
+		switch_id_1(switch_id_1),
+		port_number_1(port_number_1),
+		switch_id_2(switch_id_2),
+		port_number_2(port_number_2) {
 }
 
 void DiscoveredLink::timeout(const boost::system::error_code& error) {
@@ -32,15 +32,20 @@ void DiscoveredLink::timeout(const boost::system::error_code& error) {
 		return;
 	}
 
-	BOOST_LOG_TRIVIAL(info) << "Link between " << switch_id_1 << " and " << switch_id_2 << " timed out";
+	BOOST_LOG_TRIVIAL(info) << *this << " timed out";
 
 	//Delete link from physical switches
-	hypervisor
-		->get_physical_switch(switch_id_1)
-		->reset_link(port_number_1);
-	hypervisor
-		->get_physical_switch(switch_id_2)
-		->reset_link(port_number_2);
+	auto switch_1_ptr = hypervisor
+		->get_physical_switch(switch_id_1);
+	auto switch_2_ptr = hypervisor
+		->get_physical_switch(switch_id_2);
+
+	if( switch_1_ptr != nullptr ) {
+		switch_1_ptr->reset_link(shared_from_this());
+	}
+	if( switch_2_ptr != nullptr ) {
+		switch_2_ptr->reset_link(shared_from_this());
+	}
 
 	// Recalculate the routes
 	hypervisor->calculate_routes();
@@ -73,7 +78,7 @@ int DiscoveredLink::get_port_number(int switch_id) const {
 void DiscoveredLink::reset_timer() {
 	// Reset the expiry date to further in the future
 	liveness_timer.expires_from_now(
-		boost::posix_time::milliseconds(1000));
+		boost::posix_time::milliseconds(2100));
 	// When the expiration changes the handler is called
 	// with error code operation_aborted
 	liveness_timer.async_wait(
