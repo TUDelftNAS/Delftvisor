@@ -34,22 +34,6 @@ void DiscoveredLink::timeout(const boost::system::error_code& error) {
 
 	BOOST_LOG_TRIVIAL(info) << *this << " timed out";
 
-	//Delete link from physical switches
-	auto switch_1_ptr = hypervisor
-		->get_physical_switch(switch_id_1);
-	auto switch_2_ptr = hypervisor
-		->get_physical_switch(switch_id_2);
-
-	if( switch_1_ptr != nullptr ) {
-		switch_1_ptr->reset_link(shared_from_this());
-	}
-	if( switch_2_ptr != nullptr ) {
-		switch_2_ptr->reset_link(shared_from_this());
-	}
-
-	// Recalculate the routes
-	hypervisor->calculate_routes();
-
 	// Stop this discovered link, this call doesn't really
 	// do anything since it only cancels the timer that doesn't
 	// have any handlers attached to it since this handler
@@ -96,6 +80,21 @@ void DiscoveredLink::start() {
 void DiscoveredLink::stop() {
 	// Stop the timer
 	liveness_timer.cancel();
+
+	//Delete link from physical switches
+	auto switch_1_ptr = hypervisor
+		->get_physical_switch(switch_id_1);
+	auto switch_2_ptr = hypervisor
+		->get_physical_switch(switch_id_2);
+	if( switch_1_ptr != nullptr ) {
+		switch_1_ptr->reset_link(shared_from_this());
+	}
+	if( switch_2_ptr != nullptr ) {
+		switch_2_ptr->reset_link(shared_from_this());
+	}
+
+	// Recalculate the routes
+	hypervisor->calculate_routes();
 }
 
 void DiscoveredLink::print_to_stream(std::ostream& os) const {

@@ -84,6 +84,12 @@ void PhysicalSwitch::stop() {
 		hypervisor->unregister_physical_switch(features.datapath_id,id);
 	}
 
+	// Stop all the discovered links
+	for( auto& port : ports ) {
+		auto link = port.second.link;
+		if( link != nullptr ) link->stop();
+	}
+
 	// TODO check_online for all virtual_switches that depend on this one
 
 	BOOST_LOG_TRIVIAL(info) << *this << " stopped";
