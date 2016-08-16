@@ -48,12 +48,12 @@ void PhysicalSwitch::start() {
 	OpenflowConnection::start();
 
 	// Send an featuresrequest
-	fluid_msg::of13::FeaturesRequest features_message(get_next_xid());
+	fluid_msg::of13::FeaturesRequest features_message;
 	send_message( features_message );
 
 	// Request ports via multipart
 	fluid_msg::of13::MultipartRequestPortDescription port_description_message(
-		get_next_xid(),
+		0, // The xid will be set send_message
 		0); // The only flag is the more the flag indicating more messages follow
 	send_message( port_description_message );
 
@@ -138,7 +138,6 @@ void PhysicalSwitch::create_initial_rules() {
 	// TODO Doesn't work with slices created after this physical switch
 	for( const Slice& slice : hypervisor->get_slices() ) {
 		fluid_msg::of13::MeterMod meter_mod;
-		meter_mod.xid(get_next_xid());
 		meter_mod.command(fluid_msg::of13::OFPMC_ADD);
 		meter_mod.flags(fluid_msg::of13::OFPMF_PKTPS);
 		meter_mod.meter_id(slice.get_id()+1); // TODO Document this better, meter id's start at 1
@@ -168,7 +167,6 @@ void PhysicalSwitch::update_static_rules() {
 
 			// Create the flowmod
 			fluid_msg::of13::FlowMod flowmod;
-			flowmod.xid(get_next_xid());
 			flowmod.command(fluid_msg::of13::OFPFC_ADD);
 			flowmod.table_id(0);
 

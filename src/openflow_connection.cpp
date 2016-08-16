@@ -47,7 +47,7 @@ void OpenflowConnection::start() {
 
 	// Send a hello message to the other side,
 	// the hello element bitmap is not mandatory
-	fluid_msg::of13::Hello hello_msg(get_next_xid());
+	fluid_msg::of13::Hello hello_msg;
 	send_message(hello_msg);
 }
 
@@ -113,7 +113,7 @@ void OpenflowConnection::receive_message() {
 			message.xid(),
 			fluid_msg::of_error_type(error),
 			fluid_msg::of_error_code(error));
-		this->send_message(error_message);
+		this->send_message_response(error_message);
 
 		BOOST_LOG_TRIVIAL(error) << *this << " had an error parsing a message";
 	}
@@ -489,7 +489,14 @@ void OpenflowConnection::receive_body(
 	start_receive_message();
 }
 
-void OpenflowConnection::send_message(fluid_msg::OFMsg& message) {
+uint32_t OpenflowConnection::send_message(fluid_msg::OFMsg& message) {
+	uint32_t xid = next_xid++;
+	message.xid(xid);
+	send_message_response(message);
+	return xid;
+}
+
+void OpenflowConnection::send_message_response(fluid_msg::OFMsg& message) {
 	// Get the lock for the message queue
 	boost::lock_guard<boost::mutex> guard(send_queue_mutex);
 
@@ -514,7 +521,7 @@ void OpenflowConnection::send_message(fluid_msg::OFMsg& message) {
 }
 
 void OpenflowConnection::send_message_queue_head() {
-	BOOST_LOG_TRIVIAL(trace) << "Sending message from " << *this << ", current queue length: " << send_queue.size();
+	BOOST_LOG_TRIVIAL(trace) << *this << " sending message, current queue length: " << send_queue.size();
 
 	// The function calling this function should own the
 	// message_queue_mutex. Send the entirety of the message
@@ -582,19 +589,13 @@ void OpenflowConnection::send_echo_message(const boost::system::error_code& erro
 	}
 
 	// Send the echo message
-	fluid_msg::of13::EchoRequest echo_msg(get_next_xid());
+	fluid_msg::of13::EchoRequest echo_msg;
 	send_message(echo_msg);
 	echo_received = false;
 	BOOST_LOG_TRIVIAL(trace) << *this << " send echo request";
 
 	// Schedule the next echo message to be send
 	schedule_echo_message();
-}
-
-uint32_t OpenflowConnection::get_next_xid() {
-	static uint32_t next_xid=0;
-
-	return next_xid++;
 }
 
 void OpenflowConnection::handle_hello(fluid_msg::of13::Hello& hello_message) {
@@ -612,7 +613,7 @@ void OpenflowConnection::handle_hello(fluid_msg::of13::Hello& hello_message) {
 			hello_message.xid(),
 			fluid_msg::of13::OFPET_HELLO_FAILED,
 			fluid_msg::of13::OFPHFC_INCOMPATIBLE);
-		send_message( error_msg );
+		send_message_response( error_msg );
 
 		// Close the connection, this isn't going to work
 		stop();
@@ -631,7 +632,7 @@ void OpenflowConnection::handle_echo_request(
 		echo_request_message.data_len());
 
 	// Send the echo reply
-	this->send_message(echo_reply_message);
+	send_message_response(echo_reply_message);
 
 	BOOST_LOG_TRIVIAL(trace) << *this << " responded to echo request";
 }
@@ -651,7 +652,7 @@ void OpenflowConnection::handle_experimenter(
 		experimenter_message.xid(),
 		fluid_msg::of13::OFPET_BAD_REQUEST,
 		fluid_msg::of13::OFPBRC_BAD_EXPERIMENTER);
-	send_message( error_msg );
+	send_message_response( error_msg );
 }
 
 std::ostream& operator<<(std::ostream& os, const OpenflowConnection& con) {

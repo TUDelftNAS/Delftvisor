@@ -56,6 +56,9 @@ private:
 	/// Send an echo request over this connection
 	void send_echo_message(const boost::system::error_code& error);
 
+	/// The next xid to be used
+	uint32_t next_xid;
+
 protected:
 	/// The boost socket object
 	boost::asio::ip::tcp::socket socket;
@@ -133,9 +136,6 @@ protected:
 	virtual void handle_get_async_reply  (fluid_msg::of13::GetAsyncReply& async_reply_message) = 0;
 	virtual void handle_set_async        (fluid_msg::of13::SetAsync& set_async_message) = 0;
 
-	/// Generate the next xid
-	uint32_t get_next_xid();
-
 	/// Construct a new openflow connection
 	OpenflowConnection(boost::asio::io_service& io);
 	/// Construct a new openflow connection from an existing socket
@@ -147,9 +147,13 @@ public:
 	/// Stop receiving and pinging this connection
 	virtual void stop();
 
-	/// Send an openflow message over this connection
-	// TODO Change type to libfluid message
-	void send_message(fluid_msg::OFMsg& message);
+	/// Send an openflow message over this connection with a correct xid
+	/**
+	 * \return The xid given to the message
+	 */
+	uint32_t send_message(fluid_msg::OFMsg& message);
+	/// Send a message over this connection without rewriting xid
+	void send_message_response(fluid_msg::OFMsg& message);
 
 	/// Print this connection to a stream
 	virtual void print_to_stream(std::ostream& os) const = 0;
