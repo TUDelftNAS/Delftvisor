@@ -29,7 +29,9 @@ void Hypervisor::handle_signals(
 }
 
 void Hypervisor::start_accept() {
-	boost::shared_ptr<boost::asio::ip::tcp::socket> new_socket = boost::make_shared<boost::asio::ip::tcp::socket>(switch_acceptor.get_io_service());
+	boost::shared_ptr<boost::asio::ip::tcp::socket> new_socket =
+		boost::make_shared<boost::asio::ip::tcp::socket>(
+			switch_acceptor.get_io_service());
 
 	switch_acceptor.async_accept(
 		*new_socket,
@@ -62,7 +64,8 @@ void Hypervisor::handle_accept(
 		start_accept();
 	}
 	else if(error != boost::asio::error::operation_aborted) {
-		BOOST_LOG_TRIVIAL(error) << "Something went wrong while accepting a connection: " << error.message();
+		BOOST_LOG_TRIVIAL(error) <<
+			"Something went wrong while accepting a connection: " << error.message();
 	}
 }
 
@@ -87,7 +90,8 @@ PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) const {
 		return it->second;
 	}
 }
-PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(uint64_t datapath_id) const {
+PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(
+		uint64_t datapath_id) const {
 	auto it = datapath_id_to_switch_id.find(datapath_id);
 	if( it == datapath_id_to_switch_id.end() ) {
 		return nullptr;
@@ -177,8 +181,10 @@ void Hypervisor::calculate_routes() {
 	// Let all physical switches check if the static forwarding rules need to update
 	for( auto &ps : physical_switches ) ps.second->update_static_rules();
 
-	std::cout << "New topology:" << std::endl;
-	print_topology(std::cout);
+	// Write the new topology in dot format to a file
+	// TODO Remove this debugging info
+	std::ofstream topo_file("topo.dot");
+	print_topology(topo_file);
 }
 
 void Hypervisor::print_topology(std::ostream& os) {
