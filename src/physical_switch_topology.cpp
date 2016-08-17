@@ -20,8 +20,8 @@ void PhysicalSwitch::make_topology_discovery_rule() {
 	// Create the match
 	flowmod.add_oxm_field(
 		new fluid_msg::of13::VLANVid(
-			rewrite::slice_bits(rewrite::max_slice_id),
-			rewrite::slice_mask));
+			rewrite::slice_bits(rewrite::max_slice_id) | fluid_msg::of13::OFPVID_PRESENT,
+			rewrite::slice_mask | fluid_msg::of13::OFPVID_PRESENT));
 
 	// Create the action
 	fluid_msg::of13::WriteActions write_actions;
