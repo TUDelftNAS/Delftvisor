@@ -54,10 +54,28 @@ void PhysicalSwitch::start() {
 	send_message( features_message );
 
 	// Request ports via multipart
-	fluid_msg::of13::MultipartRequestPortDescription port_description_message(
-		0, // The xid will be set send_message
-		0); // The only flag is the more the flag indicating more messages follow
-	send_message( port_description_message );
+	{
+		fluid_msg::of13::MultipartRequestPortDescription port_description_message(
+			0, // The xid will be set send_message
+			0); // The only flag is the more the flag indicating more messages follow
+		send_message( port_description_message );
+	}
+
+	// Request information about the meters via multipart
+	{
+		fluid_msg::of13::MultipartRequestMeterFeatures information_message(
+			0, // The xid will be set send_message
+			0); // The only flag is the more the flag indicating more messages follow
+		send_message( information_message );
+	}
+
+	// Request information about the groups via multipart
+	{
+		fluid_msg::of13::MultipartRequestGroupFeatures information_message(
+			0, // The xid will be set send_message
+			0); // The only flag is the more the flag indicating more messages follow
+		send_message( information_message );
+	}
 
 	// Create the rest of the initial rules
 	create_initial_rules();
@@ -469,8 +487,16 @@ void PhysicalSwitch::handle_multipart_reply_group(fluid_msg::of13::MultipartRepl
 void PhysicalSwitch::handle_multipart_reply_group_desc(fluid_msg::of13::MultipartReplyGroupDesc& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
 }
-void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::MultipartReplyGroupFeatures& multipart_request_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::MultipartReplyGroupFeatures& multipart_reply_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received group features";
+	if( (multipart_reply_message.features().types()&(1<<fluid_msg::of13::OFPGT_ALL))==0 ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support ALL group type needed for hypervisor " << multipart_reply_message.features().types();
+	}
+	if( (multipart_reply_message.features().types()&(1<<fluid_msg::of13::OFPGT_INDIRECT))==0 ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support INDIRECT group type needed for hypervisor";
+	}
+	// TODO Check if the switch supports all actions
+	// that the hypervisor needs per group
 }
 void PhysicalSwitch::handle_multipart_reply_meter(fluid_msg::of13::MultipartReplyMeter& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
@@ -478,8 +504,14 @@ void PhysicalSwitch::handle_multipart_reply_meter(fluid_msg::of13::MultipartRepl
 void PhysicalSwitch::handle_multipart_reply_meter_config(fluid_msg::of13::MultipartReplyMeterConfig& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
 }
-void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::MultipartReplyMeterFeatures& multipart_request_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
+void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::MultipartReplyMeterFeatures& multipart_reply_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received meter features";
+	if( (multipart_reply_message.meter_features().band_types()&fluid_msg::of13::OFPMBT_DROP) == 0 ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support drop meter band type";
+	}
+	if( multipart_reply_message.meter_features().max_meter() < hypervisor->get_slices().size() ) {
+		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support enough meters";
+	}
 }
 void PhysicalSwitch::handle_multipart_reply_table_features(fluid_msg::of13::MultipartReplyTableFeatures& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart reply it shouldn't";
