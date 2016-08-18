@@ -13,7 +13,7 @@ This section list the requirements of what needs to be isolated and how to do it
 Each slice wants to be able to use multiple flow tables, group tables, meter tables and queue's.
 
 This is achieved by allocating for each slice an amount of the available resources and rewriting the id's used by that slice.
-The first flow table is reserved by the hypervisor for handling hypervisor traffic and applying actions to the packets such as rate-limiting certain slices.
+The first two flow tables are reserved by the hypervisor for handling hypervisor traffic and applying actions to the packets such as rate-limiting certain slices.
 Each packet gets a number attached in the metadata field which contains the slice it is in, each flowmod than adds a match to the slice that flowmod belongs to.
 This allows each slice to use most tables, a tenant can even use the metadata field only the first 10 bits are reserved for the slice id.
 
@@ -42,14 +42,33 @@ This is currently not detected and would allow slices to influence each others t
 Each slice needs to be able to use the full Ethernet/IP address space without clashing with another slice.
 
 OpenVirtex, an Openflow 1.0 Hypervisor, achieves this by rewriting the source and destination addresses at the edge of the network to an internal representation and rewriting it again before the packet is output again at the network edge.
-With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) which is why a different concept was chosen.
+With Openflow 1.3 this becomes difficult when rewriting packets that are output via a group table (and some other problems) and new features are available which is why a different concept was chosen.
 
-PBB (Provider Backbone Bridging, also called mac-in-mac) was chosen because it allows for 120 bits that support masking.
-Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing and VLAN tags only allow for 15 bits of maskable information which wasn't enough to contain the routing information for a sizable network.
+Double VLAN tags was choosen, in this concept VLAN tags are added to each packet containing the slice and the destination.
+Openflow switches are not required to allow masking on MPLS tags which would be necessary for efficient routing and PBB tags aren't widely supported.
+The first VLAN tag contains the slice/switch combination and the second VLAN tag contains the slice/port combination.
+The packet is routed to the switch based on the first tag, 1 hop before it gets to that switch the tag is removed and it is forwarded with only the slice/port VLAN tag.
+The target than outputs the packet after removing the VLAN tag over the desired port.
+This scheme was choosen to enlarge the amount of bit per slice/switch/port.
+We need another bit of information so the switch can differentiate between the two VLAN tags.
+Using the VLAN-vid and VLAN-pcp fields we have 15 bits of maskable fields per VLAN tag.
+We divide these bits as follows:
+
+VLAN tag 1:
+ - 7 bits slice
+ - 1 bit is port tag = 0
+ - 7 bits switch
+
+VLAN tag 2:
+ - 7 bits slice
+ - 1 bit is port tag = 1
+ - 7 bits port
+
+Special id's are reserved for target port flowtable and the topology discovery slice.
 
 The output action need to be rewritten to add the tag if necessary.
 For this purpose is reactively a group table entry created with type indirect for each slice/switch/port combination.
-This entry adds the PBB tag, sets the values and outputs the packet over the port it needs to go to.
+This entry adds the tag(s), sets the values and outputs the packet over the port it needs to go to.
 In an apply action instruction the output action can just be changed to the group action without encountering problems but the write-action instruction needs some extra logic.
 The action set of a packet can be overwritten by in other flow tables, per type of action only one is allowed in the action set.
 If an action set contains an group and an output action only the group action is executed.
@@ -58,15 +77,6 @@ To solve this problem a bit in the metadata field is used.
 When a packet has a group action in the action set the bit is set to 1, when it is removed the bit is set to 0.
 Every flow rule that has an output action in the write-action instruction that needs to be rewritten to a group action is duplicated, a version with the output action rewritten that matches on the metadata bit being 1 and a version with the output action removed that matches on the metadata bit being 0.
 This adds the constraints to the tenant controller that they cannot match/write on the left-most bit of the metadata field.
-
-PBB allows for an extra pair of source/destination mac addresses in a packet and also adds a 24 bit I-SID of which all bits are maskable.
-This allows for 120 bits of extra information per packet.
-Unfortunately are the tags applied at the end by a dedicated group table and the group table id's are only 32 bit.
-Since we also need to reserve some group id's for the tenants only 31 bits are used.
-These would be split up using:
- - 10 bit slice id
- - 11 bit switch id
- - 10 bit port id
 
 ## Topology abstraction
 Each virtual switch doesn't need to correspond 1:1 to a physical switch.
@@ -79,9 +89,9 @@ Constraints are imposed such as:
  - The group table type fast-failover cannot be used since the ports that the group might refer to don't necessarily are on the same physical switch
 
 All packets are handled by tenant rules on the switch they arrive in.
-If a packet needs to be output on a port on another switch the output action is rewritten to add a BPP tag containing the switch/port target and output on a switch-switch port with a route to the target.
+If a packet needs to be output on a port on another switch the output action is rewritten to add a VLAN tag containing the switch/port target and output on a switch-switch port with a route to the target.
 In the first flowtable packets that need to be forwarded are detected and appropriately forwarded.
-If the packet needs to be outputted at this switch is the PBB tag removed and the packet outputted.
+If the packet needs to be outputted at this switch is the VLAN tag removed and the packet outputted.
 
 Future work might include optimizing this method for the group table.
 If a rule generates a lot of copies of the packet it might be advantageous to apply the group table at a later switch instead of immediately.
@@ -95,16 +105,24 @@ The following section describes the layout of flow rules the Hypervisor.
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
-70 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | pbb-slice-bits=255 | output(controller)
-60 | Forward packet-out from tenant to personal flowtables | # of slices | in-port=controller, pbb-slice-bits=x | meter(n), write-metadata(0&1), pop-pbb, goto-tbl(n\*k+1)
-50 | Forward inter-virtual-switch traffic | # of ports with links \* (# of switches-1) | in-port=x, pbb-switch-bits=y | output(z)
-40 | Output already processed packet over port with link | # of slices \* # of ports with link \* # of ports with link | in-port=x, pbb-slice-bits=y pbb-switch-bits=z, pbb-port-bits=w | meter(n), output(a)
-30 | Output already processed packet over port without link | # of ports with link \* # of ports without link | in-port=x, pbb-switch-bits=y, pbb-port-bits=z | pop-pbb, output(a)
-20 | Detect erroneous packets on switch links, cookie=2 | # of ports with link | in-port=x | output(controller)
-10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), write-metadata(0&1), goto-tbl(n\*k+1)
+40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | vlan-slice-bits=max-slice | output(controller)
+30 | Forward packet-out from tenant to personal flowtables | # of slices | in-port=controller, vlan-slice-bits=z | meter(n), write-metadata-group-bit, write-metadata-slice-bits, pop-vlan, goto-tbl(2)
+20 | Detect that traffic has arrived over a port with a link | #of ports with links | in-port=z | goto-tbl(1)
+10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
+ 0 | Error detection rule, cookie=2 | 1 | * | output(controller)
+
+## Table 1, Traffic arrived over port with a link
+
+Priority | Purpose | Amount | Match | Instructions
+---------|---------|--------|-------|-------------
+50 | Forward message over shared link to slice flowtable | # of slice | vlan-is-port=1, vlan-slice-bits=z, vlan-port-bits=max-port | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
+40 | Forward message to other switch | # of switches - 1 | vlan-is-port-tag=0, vlan-switch-bits=z | output(a)
+30 | Forward message to other switch that is 1 hop away | # of switches - 1 | vlan-is-port-tag=0, vlan-switch-bits=z | pop-vlan, output(a)
+20 | Output preprocessed message over port without link | # of ports without link | vlan-is-port-tag=1, vlan-port-bits=z  | pop-vlan, output(a)
+10 | Output preprocessed message over port with link | # of ports with link | vlan-is-port-tag=1, vlan-port-bits=z  | vlan-port-bits=max-port, output(a)
  0 | Error detection rule, cookie=3 | 1 | * | output(controller)
 
-## Table n | n>0, tenant tables
+## Table n | n>=2, tenant tables
 
 Priority | Purpose | Amount | Match | Instructions
 ---------|---------|--------|-------|-------------
@@ -114,7 +132,7 @@ Priority | Purpose | Amount | Match | Instructions
 
 Purpose | Id | Amount | Mode | Buckets
 --------|----|--------|------|--------
-Add outgoing PBB tag, added reactively | Concatenation of slice-bits, switch-bits, port-bits | variable, but at most # of slices \* # of ports in network not on this switch \* # of ports | Indirect | bucket(push-pbb, pbb-slice-bits=a, pbb-switch-bits=b, pbb-port-bits=c, output(d))
+Forward a packet to a port in the network | Concatenation of slice-bits, switch-bits, port-bits | variable, but at most # of slices \* # of ports in network not on this switch \* # of ports | Indirect | 4 versions: bucket(output(a)), bucket(push-vlan, vlan-slice-bits=a, vlan-port-bits=max-ports, output(b)), bucket(push-vlan, vlan-slice-bits=a, vlan-port-bits=b, output(c)), bucket(push-vlan, vlan-slice-bits=a, vlan-switch-bits=b, push-vlan, vlan-slice-bits=a, vlan-switch-bits=c, output(d))
 Simulate FLOOD output action | 2^31+slice-id | # of slices | All | bucket(output(x)), bucket(group(x)), etc
 
 ## Meter tables
@@ -178,8 +196,6 @@ Send the packet to the switch.
 
 Remove the buffer-id rewrite from the virtual switch.
 
-TODO Use VLAN tag instead of PBB tag since it's smaller?
-
 ### FlowMod
 
 If table_id=OFPTT_ALL create clone messages for each table assigned to this slice.
@@ -195,14 +211,13 @@ Scan action list:
   If action is queue:
     Return error Bad Action with type Unsupported Order
   If action is output:
-    If output to port on this switch:
-      Rewrite output port number
     If output over FLOOD port:
       Replace with group action to slice flood group
-    If output to port not on this switch:
+    Else:
       If relevant forwarding group is not created:
-        Create groupmod message with actions push-pbb, set-field, output
+        Create groupmod message with actions push-vlan, set-field, output
         Send groupmod message
+        Register that group is created
         Send barrierrequest
       Replace with group action that adds correct tag and output over correct link
 ```
@@ -227,16 +242,15 @@ For each clone packet:
         If action is queue:
           Return error Bad Action with type Unsupported Order
         If action is output:
-          If output to port on this switch:
-            Rewrite output port number
           If output over FLOOD port:
             Replace with group action to slice flood group
             Add matching on metadata 1 and mask 1
             Clone rule with the metadata match on metadata 0 and mask 1 and with this action removed
-          If output to port not on this switch:
+          Else:
             If relevant forwarding group is not created:
-              Create groupmod message with actions push-pbb, set-field, output
+              Create relevant groupmod (look at grouptable examples)
               Send groupmod message
+              Register that group is created
               Send barrierrequest
             Replace output action with group action that adds correct tag and output over correct link
             Add matching on metadata 1 and mask 1
@@ -244,17 +258,17 @@ For each clone packet:
     If instruction is clear-actions:
       Add write-metadata instruction with metadata 0 and mask 1
     If instruction is write-metadata:
-      If left-most bit in mask is set:
+      If left-most x bits in mask is set:
         Drop rule, Return error
       Else:
-        Shift mask and metadata 11 bits to the left
+        Shift mask and metadata x bits to the left
 
   Scan match fields:
     If match on metadata:
-      If left-most bit in mask is set:
+      If left-most x bits in mask is set:
         Drop rule, return error
       Else:
-        Shift mask and metadata 11 bits to the left
+        Shift mask and metadata x bits to the left
         Add slice id metadata
     Add match on slice id metadata
 
@@ -294,6 +308,7 @@ For each physical switch this virtual switch depends on:
   If type=modify:
     If group-id is not in physical switch group-id map:
       Send error Group Mod Failed and type Unknown Group
+      Done
     Rewrite group-id
     Scan buckets:
       Use apply-action algorithm on the bucket action list
@@ -337,7 +352,9 @@ Send error Port Mod Failed with type EPerm.
 This message is deprecated in openflow 1.3, don't do anything.
 
 ### MultipartRequest
-Return a Bad Request error with type Bad Multipart.
+Support only the bare minimum so an experiment can be done where the hypervisor runs on top of itself.
+This would at least involve the PortDescription message.
+Otherwise return a Bad Request error with type Bad Multipart.
 This indicates that this type of multipart message is not supported.
 
 Providing statistics is currently out of scope for this project.
@@ -375,13 +392,13 @@ TODO The error message contains part of openflow message that generated it. This
 ### PacketIn
 Use the following algorithm:
 ```
-If table-id=0:
-  If eth-src=x & eth-dst=y:
+If table-id=0 or table-id=1:
+  If cookie=1:
     Packet from topology discovery, extract what switch it is from, mark link live, reset liveness timer
   Else:
     Log packet, print error
 Else:
-  Figure out what slice generated this error via metadata
+  Figure out what slice generated this error via metadata oxm
 
   Rewrite table-id in packet
 
@@ -401,15 +418,16 @@ Else:
   Send packet to tenant controller
 ```
 
-TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking at the PBB tag or the port.
+TODO Does it happen that a packet for a tenant generates a TTL PacketIn when arriving at the switch instead of on the dec-ttl actions? In that case the slice/tenant needs to be discovered looking at the VLAN tags or the port.
 
 The buffer-id maps do not need to be maintained since if the buffer doesn't exist anymore on the switch is the error message just forwarded back to the tenant.
 If a buffer-id would be re-used by a switch is the entry deleted from all virtual switches and does the PacketOut return an error from the Hypervisor.
 
 ### FlowRemoved
-
 Some rules from the tenant become 2 rules in the physical switch (group action in the write-action instruction).
 Make sure that stays consistent.
+
+If the flow came from table 1 or 2 log error, otherwise figure out what slice generated this message via metadata oxm and forward to a random virtual switch that has a port on this physical switch.
 
 Only forward if the controller Async request filter says the controller wants to receive these packets.
 
@@ -429,7 +447,7 @@ Afterwards periodically send EchoRequests to each controller and switch.
 The echo requests
 
 ### Topology discovery packets
-The topology discovery packets are as tiny as possible packets with a pbb-tag.
+The topology discovery packets are as tiny as possible packets with a vlan-tag.
 Periodically over every port is a packet send with slice 255, the switch bits set to the switch it originates from and the port bits set to the port it originates from.
 When this packet is received by a switch is it send to the controller so the controller can defer that a link exists.
 
@@ -496,7 +514,7 @@ This section lists what data needs to be saved in the Hypervisor to function.
  - Set of ports (count port status)
  - Internal id (for routing)
  - If this switch received an EchoReply on the last EchoRequest
- - Map of created forward group entries (the group-id's of groups that are created that forward traffic to an output port while adding a pbb-tag) to the output port they forward to, group-id -> output-port
+ - Map of created forward group entries (the group-id's of groups that are created that forward traffic to an output port while adding a vlan-tag(s)) to the output port they forward to, group-id -> output-port
  - Map of group-id's to virtual group-id's, group-id <-> (virtual-dpid,group-id)
  - Map of meter-id's to virtual meter-id's, meter-id <-> (virtual-dpid,meter-id)
  - Map of xid's so responses can be properly forwarded, xid <-> (virtual-switch,xid)
