@@ -291,9 +291,10 @@ void OpenflowConnection::receive_body(
 					&OpenflowConnection::handle_multipart_reply_meter_features>();
 				break;
 			case fluid_msg::of13::OFPMP_TABLE_FEATURES:
-				receive_message<
-					fluid_msg::of13::MultipartReplyTableFeatures,
-					&OpenflowConnection::handle_multipart_reply_table_features>();
+				// This segfaults at fluid/of13/of13common.cc:1185 because prop==NULL
+				//receive_message<
+				//	fluid_msg::of13::MultipartReplyTableFeatures,
+				//	&OpenflowConnection::handle_multipart_reply_table_features>();
 				break;
 			case fluid_msg::of13::OFPMP_PORT_DESC:
 				receive_message<
