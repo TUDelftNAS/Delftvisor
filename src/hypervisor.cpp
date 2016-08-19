@@ -121,7 +121,7 @@ void Hypervisor::start() {
 	start_accept();
 
 	// Start all of the slices
-	for( Slice s : slices ) s.start();
+	for( Slice& s : slices ) s.start();
 }
 
 void Hypervisor::stop() {
