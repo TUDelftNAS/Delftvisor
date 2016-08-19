@@ -286,7 +286,7 @@ PhysicalSwitch::pointer PhysicalSwitch::shared_from_this() {
 }
 
 void PhysicalSwitch::handle_error(fluid_msg::of13::Error& error_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received error Code=" << error_message.code() << " Type=" << error_message.err_type();
+	BOOST_LOG_TRIVIAL(info) << *this << " received error Type=" << error_message.err_type() << " Code=" << error_message.code();
 	// TODO
 }
 void PhysicalSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message) {
