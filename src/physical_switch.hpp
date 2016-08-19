@@ -115,7 +115,7 @@ private:
 	std::unordered_map<int,uint32_t> next;
 
 	/// Setup the flow table with the static initial rules
-	void create_initial_rules();
+	void create_static_rules();
 
 public:
 	typedef boost::shared_ptr<PhysicalSwitch> pointer;
@@ -165,8 +165,8 @@ public:
 	/// Set the port to forward traffic over to get to a switch
 	void set_next(int switch_id, uint32_t port_number);
 
-	/// Update the static rules after the topology has change
-	void update_static_rules();
+	/// Update the dynamic rules after the topology has change
+	void update_dynamic_rules();
 
 	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);

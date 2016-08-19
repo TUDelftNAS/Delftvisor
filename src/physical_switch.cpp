@@ -78,9 +78,9 @@ void PhysicalSwitch::start() {
 	}
 
 	// Create the rest of the initial rules
-	create_initial_rules();
+	create_static_rules();
 	// Create the dynamic rules
-	update_static_rules();
+	update_dynamic_rules();
 
 	// Start sending topology discovery messages
 	schedule_topology_discovery_message();
@@ -113,7 +113,7 @@ void PhysicalSwitch::stop() {
 	BOOST_LOG_TRIVIAL(info) << *this << " stopped";
 }
 
-void PhysicalSwitch::create_initial_rules() {
+void PhysicalSwitch::create_static_rules() {
 	// Create the topology discovery forward rule
 	make_topology_discovery_rule();
 
@@ -158,7 +158,7 @@ void PhysicalSwitch::create_initial_rules() {
 	// Send a barrierrequest
 }
 
-void PhysicalSwitch::update_static_rules() {
+void PhysicalSwitch::update_dynamic_rules() {
 	// Forward traffic between switches, if a packet comes
 	// in over a link with a connection to another switch
 	for( auto& switch_it : hypervisor->get_physical_switches() ) {

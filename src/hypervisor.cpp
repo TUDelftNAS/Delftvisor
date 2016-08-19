@@ -178,8 +178,8 @@ void Hypervisor::calculate_routes() {
 	// Let all the virtual switches check if they should go online/down
 	for( Slice& s : slices ) s.check_online();
 
-	// Let all physical switches check if the static forwarding rules need to update
-	for( auto &ps : physical_switches ) ps.second->update_static_rules();
+	// Let all physical switches check if the dynamic forwarding rules need to update
+	for( auto &ps : physical_switches ) ps.second->update_dynamic_rules();
 
 	// Write the new topology in dot format to a file
 	// TODO Remove this debugging info
