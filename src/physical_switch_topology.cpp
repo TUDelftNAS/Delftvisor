@@ -1,7 +1,7 @@
 #include "physical_switch.hpp"
 #include "discoveredlink.hpp"
 #include "hypervisor.hpp"
-#include "rewrite.hpp"
+#include "vlan_tag.hpp"
 
 #include <vector>
 
@@ -14,14 +14,13 @@ void PhysicalSwitch::make_topology_discovery_rule() {
 	flowmod.command(fluid_msg::of13::OFPFC_ADD);
 	flowmod.table_id(0);
 	flowmod.cookie(1);
-	flowmod.priority(70);
+	flowmod.priority(40);
 	flowmod.buffer_id(OFP_NO_BUFFER);
 
 	// Create the match
-	flowmod.add_oxm_field(
-		new fluid_msg::of13::VLANVid(
-			rewrite::slice_bits(rewrite::max_slice_id) | fluid_msg::of13::OFPVID_PRESENT,
-			rewrite::slice_mask | fluid_msg::of13::OFPVID_PRESENT));
+	vlan_tag::Id vlan_id;
+	vlan_id.set_slice(vlan_tag::max_slice_id);
+	vlan_id.add_to_match(flowmod);
 
 	// Create the action
 	fluid_msg::of13::WriteActions write_actions;
@@ -57,10 +56,14 @@ void PhysicalSwitch::schedule_topology_discovery_message() {
 
 // A random ARP packet with a VLAN tag. The VLAN id=0
 std::vector<uint8_t> topology_discovery_packet = {
-0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x05, 0x02, 0x71, 0xfc, 0xdb, 0x81, 0x00, 0x00, 0x10,
-0x00, 0x24, 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04,
-0x00, 0x01, 0x00, 0x05, 0x02, 0x71, 0xfc, 0xdb, 0x83, 0x97, 0x14, 0x48, 0xff, 0xff, 0xff, 0xff,
-0xff, 0xff, 0x83, 0x97, 0x14, 0xfe, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x05,
+	0x02, 0x71, 0xfc, 0xdb, 0x81, 0x00, 0x00, 0x10, 0x81, 0x00, 0x00, 0x10,
+	0x00, 0x24, 0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00,
+	0x08, 0x06, 0x00, 0x01, 0x08, 0x00, 0x06, 0x04,
+	0x00, 0x01, 0x00, 0x05, 0x02, 0x71, 0xfc, 0xdb,
+	0x83, 0x97, 0x14, 0x48, 0xff, 0xff, 0xff, 0xff,
+	0xff, 0xff, 0x83, 0x97, 0x14, 0xfe, 0x55, 0x55,
+	0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55
 };
 
 void PhysicalSwitch::send_topology_discovery_message(
@@ -85,17 +88,21 @@ void PhysicalSwitch::send_topology_discovery_message(
 	uint32_t port_number = it->first;
 
 	// Create the data and mask with the slice/switch/port information
-	uint32_t vlan_id =
-		rewrite::slice_bits(rewrite::max_slice_id) |
-		rewrite::switch_bits(id) |
-		rewrite::port_bits(port_number);
-	// Add the CFI bit
-	vlan_id = (vlan_id&rewrite::make_mask(12)) |
-		(1<<12) |
-		((vlan_id&(rewrite::make_mask(3)<<12))<<1);
+	vlan_tag::Id vlan_id_1;
+	vlan_id_1.set_is_port_tag(0);
+	vlan_id_1.set_slice(vlan_tag::max_slice_id);
+	vlan_id_1.set_switch(id);
+	vlan_tag::Id vlan_id_2;
+	vlan_id_2.set_is_port_tag(1);
+	vlan_id_2.set_slice(vlan_tag::max_slice_id);
+	vlan_id_2.set_switch(port_number);
+	uint16_t vlan_id_1_raw = vlan_id_1.make_raw();
+	uint16_t vlan_id_2_raw = vlan_id_2.make_raw();
 	// Set the vlan values in the packet
-	topology_discovery_packet[14] = (vlan_id>>8) & 0xff;
-	topology_discovery_packet[15] = vlan_id & 0xff;
+	topology_discovery_packet[14] = (vlan_id_1_raw>>8) & 0xff;
+	topology_discovery_packet[15] = vlan_id_1_raw & 0xff;
+	topology_discovery_packet[18] = (vlan_id_2_raw>>8) & 0xff;
+	topology_discovery_packet[19] = vlan_id_2_raw & 0xff;
 
 	// Create the packet out message
 	fluid_msg::of13::PacketOut packet_out;
@@ -130,20 +137,22 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 	struct EthernetHeader {
 		uint8_t mac_dst[6];
 		uint8_t mac_src[6];
-		uint8_t ether_type[2];
-		uint8_t vlan_tag[2];
+		uint8_t ether_type_1[2];
+		uint8_t vlan_tag_1[2];
+		uint8_t ether_type_2[2];
+		uint8_t vlan_tag_2[2];
 	};
 	EthernetHeader * packet = (EthernetHeader*) packet_in_message.data();
 	// Interpret the vlan tag disregarding endianness
-	uint32_t vlan_id = packet->vlan_tag[0]*256+packet->vlan_tag[1];
-	// Remove the 12th bit, this is the CFI bit and is always 1
-	vlan_id = (vlan_id&rewrite::make_mask(12)) |
-		((vlan_id>>1)&(rewrite::make_mask(3)<<12));
+	uint16_t vlan_id_1_raw = packet->vlan_tag_1[0]*256+packet->vlan_tag_1[1];
+	vlan_tag::Id vlan_id_1 = vlan_tag::Id::create_from_raw(vlan_id_1_raw);
+	uint16_t vlan_id_2_raw = packet->vlan_tag_2[0]*256+packet->vlan_tag_2[1];
+	vlan_tag::Id vlan_id_2 = vlan_tag::Id::create_from_raw(vlan_id_2_raw);
 
 	// Extract the relevant information from the VLAN tag
-	int switch_num = rewrite::extract_switch_id(vlan_id);
-	int slice      = rewrite::extract_slice_id(vlan_id);
-	uint32_t port  = rewrite::extract_port_id(vlan_id);
+	int switch_num = vlan_id_1.get_switch();
+	int slice      = vlan_id_1.get_slice();
+	uint32_t port  = vlan_id_2.get_switch();
 
 	// Extract the slice id to see if this is for topology discovery
 	BOOST_LOG_TRIVIAL(trace) << *this
@@ -152,7 +161,7 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 		<< "\t sw=" << switch_num << " sl=" << slice << " p=" << port;
 
 	// If this doesn't use the slice reserved for topology discovery
-	if( slice != rewrite::max_slice_id ) {
+	if( slice != vlan_tag::max_slice_id ) {
 		BOOST_LOG_TRIVIAL(error) << *this << " received topology discovery packet in with wrong slice: " << slice;
 		return;
 	}
@@ -184,6 +193,8 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 
 		// Recalculate the routes with this extra link
 		hypervisor->calculate_routes();
+
+		BOOST_LOG_TRIVIAL(info) << *this << " found link to " << *switch_2_pointer;
 	}
 	else {
 		// Reset the liveness timer on this link

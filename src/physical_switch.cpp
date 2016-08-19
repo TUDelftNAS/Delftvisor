@@ -3,7 +3,7 @@
 #include "hypervisor.hpp"
 #include "discoveredlink.hpp"
 
-#include "rewrite.hpp"
+#include "vlan_tag.hpp"
 
 #include <boost/log/trivial.hpp>
 
