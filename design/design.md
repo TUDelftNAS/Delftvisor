@@ -103,24 +103,24 @@ The following section describes the layout of flow rules the Hypervisor.
 
 ## Table 0, Hypervisor reserved table
 
-Priority | Purpose | Amount | Match | Instructions
----------|---------|--------|-------|-------------
-40 | Forward Hypervisor topology discovery packets, cookie=1 | 1 | vlan-slice-bits=max-slice | output(controller)
-30 | Forward packet-out from tenant to personal flowtables | # of slices | in-port=controller, vlan-slice-bits=z | meter(n), write-metadata-group-bit, write-metadata-slice-bits, pop-vlan, goto-tbl(2)
-20 | Detect that traffic has arrived over a port with a link | #of ports with links | in-port=z | goto-tbl(1)
-10 | Forward new packet to personal flowtables | # of ports without link | in-port=x | meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
- 0 | Error detection rule, cookie=2 | 1 | * | output(controller)
+Priority | Purpose | Amount | Cookie | Match | Instructions
+---------|---------|--------|--------|-------|-------------
+40 | Forward Hypervisor topology discovery packets | 1 | 1 | vlan-slice-bits=max-slice | output(controller)
+30 | Forward packet-out from tenant to personal flowtables | # of slices | slice id | in-port=controller, vlan-slice-bits=z | meter(n), write-metadata-group-bit, write-metadata-slice-bits, pop-vlan, goto-tbl(2)
+20 | Detect that traffic has arrived over a port with a link | #of ports with links | port | in-port=z | goto-tbl(1)
+10 | Forward new packet to personal flowtables | # of ports without link | port | in-port=z | meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
+ 0 | Error detection rule | 1 | 2 | * | output(controller)
 
 ## Table 1, Traffic arrived over port with a link
 
-Priority | Purpose | Amount | Match | Instructions
----------|---------|--------|-------|-------------
-50 | Forward message over shared link to slice flowtable | # of slice | vlan-is-port=1, vlan-slice-bits=z, vlan-port-bits=max-port | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
-40 | Forward message to other switch | # of switches - 1 | vlan-is-port-tag=0, vlan-switch-bits=z | output(a)
-30 | Forward message to other switch that is 1 hop away | # of switches - 1 | vlan-is-port-tag=0, vlan-switch-bits=z | pop-vlan, output(a)
-20 | Output preprocessed message over port without link | # of ports without link | vlan-is-port-tag=1, vlan-port-bits=z  | pop-vlan, output(a)
-10 | Output preprocessed message over port with link | # of ports with link | vlan-is-port-tag=1, vlan-port-bits=z  | vlan-port-bits=max-port, output(a)
- 0 | Error detection rule, cookie=3 | 1 | * | output(controller)
+Priority | Purpose | Amount | Cookie | Match | Instructions
+---------|---------|--------|--------|-------|-------------
+50 | Forward message over shared link to slice flowtable | # of slice | slice id | vlan-is-port=1, vlan-slice-bits=z, vlan-port-bits=max-port | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
+40 | Forward message to other switch | # of switches - 1 | switch id | vlan-is-port-tag=0, vlan-switch-bits=z | output(a)
+30 | Forward message to other switch that is 1 hop away | # of switches - 1 | switch id | vlan-is-port-tag=0, vlan-switch-bits=z | pop-vlan, output(a)
+20 | Output preprocessed message over port without link | # of ports without link | port | vlan-is-port-tag=1, vlan-port-bits=z  | pop-vlan, output(a)
+10 | Output preprocessed message over port with link | # of ports with link | port | vlan-is-port-tag=1, vlan-port-bits=z  | vlan-port-bits=max-port, output(a)
+ 0 | Error detection rule | 1 | 3 | * | output(controller)
 
 ## Table n | n>=2, tenant tables
 
