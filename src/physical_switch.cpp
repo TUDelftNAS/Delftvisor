@@ -117,12 +117,13 @@ void PhysicalSwitch::create_static_rules() {
 	// Create the topology discovery forward rule
 	make_topology_discovery_rule();
 
-	// Create the error detection rule
+	// Create the error detection rules
 	{
 		// Create the flowmod
 		fluid_msg::of13::FlowMod flowmod;
 		flowmod.command(fluid_msg::of13::OFPFC_ADD);
-		flowmod.cookie(3);
+		flowmod.priority(0);
+		flowmod.cookie(2);
 		flowmod.table_id(0);
 		flowmod.buffer_id(OFP_NO_BUFFER);
 
@@ -135,6 +136,11 @@ void PhysicalSwitch::create_static_rules() {
 		flowmod.add_instruction(write_actions);
 
 		// Send the message
+		send_message(flowmod);
+
+		// Change the table number and do it again
+		flowmod.table_id(1);
+		flowmod.cookie(3);
 		send_message(flowmod);
 	}
 
