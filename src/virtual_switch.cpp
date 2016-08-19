@@ -69,6 +69,7 @@ void VirtualSwitch::start() {
 
 void VirtualSwitch::stop() {
 	if( state!=down ) {
+		BOOST_LOG_TRIVIAL(info) << *this << " stopped";
 		OpenflowConnection::stop();
 		// socket.cancel()
 		socket.close();
@@ -116,13 +117,13 @@ void VirtualSwitch::check_online() {
 		}
 	}
 
-	BOOST_LOG_TRIVIAL(info) << *this << " checked for online, all_online_and_reachable=" << all_online_and_reachable << " state=" << state;
+	//BOOST_LOG_TRIVIAL(info) << *this << " checked for online, all_online_and_reachable=" << all_online_and_reachable << " state=" << state;
 
 	// Update this virtual switch state if needed
 	if( all_online_and_reachable && state==down ) {
 		start();
 	}
-	else if(!all_online_and_reachable && state!=down ) {
+	else if( !all_online_and_reachable && state!=down ) {
 		stop();
 	}
 }
@@ -320,5 +321,5 @@ void VirtualSwitch::handle_multipart_reply_experimenter(fluid_msg::of13::Multipa
 }
 
 void VirtualSwitch::print_to_stream(std::ostream& os) const {
-	os << "[Virtual switch " << datapath_id << ", online=" << (socket.is_open()) << "]";
+	os << "[Virtual switch dpid=" << datapath_id << ", online=" << (socket.is_open()) << "]";
 }

@@ -9,11 +9,15 @@
 			"max_rate"         : 500,
 			"virtual_switches" : [
 				{
-					"datapath_id"    : 0,
+					"datapath_id"    : 1,
 					"physical_ports" : [
 						{
-							"datapath_id" : 0,
-							"ports"       : [0,1,2,3]
+							"datapath_id" : 1,
+							"ports"       : [2]
+						},
+						{
+							"datapath_id" : 3,
+							"ports"       : [2]
 						}
 					]
 				}
