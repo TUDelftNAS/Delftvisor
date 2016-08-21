@@ -15,6 +15,7 @@
 #include <boost/log/sources/record_ostream.hpp>
 
 #include "hypervisor.hpp"
+#include "slice.hpp"
 
 /// The amount of threads to spawn
 int num_threads;
@@ -152,6 +153,10 @@ int main(int argc, char* argv[]) {
 	Hypervisor h( io );
 	try {
 		h.load_configuration( configuration_file );
+	}
+	catch( const std::exception& e ) {
+		std::cerr << e.what() << std::endl;
+		return 1;
 	}
 	catch( ... ) {
 		std::cerr << "Problem in configuration file " << configuration_file << std::endl;

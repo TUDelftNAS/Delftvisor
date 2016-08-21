@@ -13,11 +13,20 @@
 					"physical_ports" : [
 						{
 							"datapath_id" : 1,
-							"ports"       : [2]
+							"ports"       : [1,2]
 						},
 						{
 							"datapath_id" : 3,
-							"ports"       : [2]
+							"ports"       : [1,2]
+						}
+					]
+				},
+				{
+					"datapath_id"    : 2,
+					"physical_ports" : [
+						{
+							"datapath_id" : 2,
+							"ports"       : [1,2,3]
 						}
 					]
 				}

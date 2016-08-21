@@ -37,10 +37,16 @@ private:
 	/// The slice this virtual switch belongs to
 	Slice* slice;
 
+	/// The timer used to backoff between connection attempts
+	boost::asio::deadline_timer connection_backoff_timer;
+	/// The function called when the timer expires
+	void backoff_expired(const boost::system::error_code& error);
 	/// Try to connect to the controller
 	void try_connect();
+	/// Tell this virtual switch to go down
+	void go_down();
 	/// The callback when the connection succeeds
-	void handle_connect( const boost::system::error_code& error );
+	void handle_connect(const boost::system::error_code& error);
 public:
 	typedef boost::shared_ptr<VirtualSwitch> pointer;
 

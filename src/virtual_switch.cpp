@@ -5,6 +5,7 @@
 #include "hypervisor.hpp"
 #include "virtual_switch.hpp"
 #include "physical_switch.hpp"
+#include "slice.hpp"
 
 VirtualSwitch::VirtualSwitch(
 		boost::asio::io_service& io,
@@ -13,6 +14,7 @@ VirtualSwitch::VirtualSwitch(
 		Slice *slice)
 	:
 		OpenflowConnection::OpenflowConnection(io),
+		connection_backoff_timer(io),
 		datapath_id(datapath_id),
 		hypervisor(hypervisor),
 		slice(slice),
@@ -32,6 +34,7 @@ void VirtualSwitch::remove_port(uint32_t port_number) {
 }
 
 void VirtualSwitch::try_connect() {
+	state = try_connecting;
 	socket.async_connect(
 		slice->get_controller_endpoint(),
 		boost::bind(
@@ -42,40 +45,64 @@ void VirtualSwitch::try_connect() {
 
 void VirtualSwitch::handle_connect(const boost::system::error_code& error) {
 	if( !error ) {
-		OpenflowConnection::start();
-
-		state = connected;
-
-		BOOST_LOG_TRIVIAL(info) << *this << " got connected";
-
-		// Send PortStatus messages for each port
-		for( auto& port : ports ) {
-			// TODO
-		}
+		start();
 	}
 	else {
 		// Try connecting again?
+		if( state==try_connecting ) {
+			connection_backoff_timer.expires_from_now(
+				boost::posix_time::milliseconds(500));
+			connection_backoff_timer.async_wait(
+				boost::bind(
+					&VirtualSwitch::backoff_expired,
+					shared_from_this(),
+					boost::asio::placeholders::error));
+		}
+	}
+}
+
+void VirtualSwitch::backoff_expired(
+		const boost::system::error_code& error) {
+	if( !error ) {
+		BOOST_LOG_TRIVIAL(trace) << *this << " connecting failed, trying again";
 		try_connect();
+	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << *this << " backoff error " << error.message();
 	}
 }
 
 void VirtualSwitch::start() {
-	if( state==down ) {
+	if( state==try_connecting ) {
+		OpenflowConnection::start();
+		state = connected;
 		BOOST_LOG_TRIVIAL(info) << *this << " started";
-		state = try_connecting;
-		try_connect();
 	}
 }
 
 void VirtualSwitch::stop() {
-	if( state!=down ) {
-		BOOST_LOG_TRIVIAL(info) << *this << " stopped";
-		OpenflowConnection::stop();
-		// socket.cancel()
-		socket.close();
+	// Clean up the openflow connection structures
+	OpenflowConnection::stop();
 
-		state = down;
+	// Stop any work in the backoff timer
+	connection_backoff_timer.cancel();
+
+	// If we the connection was stopped by the controller
+	// immediatly try again
+	if( state==connected ) {
+		BOOST_LOG_TRIVIAL(info) << *this <<
+			" connection dropped, trying again";
+		try_connect();
 	}
+	else {
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" cannot stop since not connected";
+	}
+}
+
+void VirtualSwitch::go_down() {
+	state = down;
+	stop();
 }
 
 bool VirtualSwitch::is_connected() {
@@ -91,7 +118,9 @@ void VirtualSwitch::check_online() {
 
 	for( auto& port : ports ) {
 		// Lookup the PhysicalSwitch that owns this port
-		auto switch_ptr = hypervisor->get_physical_switch_by_datapath_id(port.second.datapath_id);
+		auto switch_ptr = hypervisor
+			->get_physical_switch_by_datapath_id(
+				port.second.datapath_id);
 
 		// TODO Make sure the physical switch actually has the
 		// port that is referred to
@@ -121,10 +150,10 @@ void VirtualSwitch::check_online() {
 
 	// Update this virtual switch state if needed
 	if( all_online_and_reachable && state==down ) {
-		start();
+		try_connect();
 	}
 	else if( !all_online_and_reachable && state!=down ) {
-		stop();
+		go_down();
 	}
 }
 
@@ -321,5 +350,5 @@ void VirtualSwitch::handle_multipart_reply_experimenter(fluid_msg::of13::Multipa
 }
 
 void VirtualSwitch::print_to_stream(std::ostream& os) const {
-	os << "[Virtual switch dpid=" << datapath_id << ", online=" << (socket.is_open()) << "]";
+	os << "[Virtual switch dpid=" << datapath_id << ", state=" << (state==down?"down":(state==try_connecting?"try_connecting":"connected")) << "]";
 }
