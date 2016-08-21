@@ -9,7 +9,8 @@ add_executable(hypervisor
 	physical_switch.cpp
 	physical_switch_topology.cpp
 	openflow_connection.cpp
-	discoveredlink.cpp)
+	discoveredlink.cpp
+	id_allocator.cpp)
 
 include_directories(${LibFluid_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${LibFluid_LIBRARIES})

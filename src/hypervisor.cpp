@@ -1,5 +1,8 @@
 #include "hypervisor.hpp"
 #include "discoveredlink.hpp"
+#include "slice.hpp"
+#include "physical_switch.hpp"
+#include "vlan_tag.hpp"
 
 #include <iostream>
 
@@ -12,7 +15,7 @@
 Hypervisor::Hypervisor( boost::asio::io_service& io ) :
 	signals(io, SIGINT, SIGTERM),
 	switch_acceptor(io),
-	next_physical_switch_id(0) {
+	physical_switch_id_allocator(0,vlan_tag::max_switch_id) {
 }
 
 void Hypervisor::handle_signals(
@@ -46,8 +49,8 @@ void Hypervisor::handle_accept(
 		const boost::system::error_code& error,
 		boost::shared_ptr<boost::asio::ip::tcp::socket> socket) {
 	if( !error ) {
-		// Calculate the next switch id
-		int id = next_physical_switch_id++;
+		// Reserve a switch id
+		int id = physical_switch_id_allocator.new_id();
 
 		// Add the physical switch to the list
 		physical_switches.emplace(
@@ -75,6 +78,7 @@ void Hypervisor::register_physical_switch(uint64_t datapath_id, int switch_id) {
 
 void Hypervisor::unregister_physical_switch(int switch_id) {
 	physical_switches.erase(switch_id);
+	physical_switch_id_allocator.free_id(switch_id);
 }
 void Hypervisor::unregister_physical_switch(uint64_t datapath_id, int switch_id) {
 	datapath_id_to_switch_id.erase(datapath_id);

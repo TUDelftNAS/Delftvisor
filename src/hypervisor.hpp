@@ -7,8 +7,10 @@
 
 #include <boost/asio.hpp>
 
-#include "slice.hpp"
 #include "physical_switch.hpp"
+#include "id_allocator.hpp"
+
+class Slice;
 
 /// The top-level class
 class Hypervisor {
@@ -19,8 +21,8 @@ private:
 	/// The slices in this hypervisor
 	std::vector<Slice> slices;
 
-	/// The next switch id for a physical switch
-	int next_physical_switch_id;
+	/// The allocator for physical switch id's
+	IdAllocator physical_switch_id_allocator;
 	/// The physical switches registered at this hypervisor
 	std::unordered_map<int,PhysicalSwitch::pointer> physical_switches;
 	/// A map from datapath id to switch id

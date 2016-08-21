@@ -126,7 +126,7 @@ public:
 			int id,
 			Hypervisor* hypervisor);
 
-	/// Get id
+	/// Get the internal id
 	int get_id() const;
 
 	/// Get the ports on this switch
