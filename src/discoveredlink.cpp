@@ -24,11 +24,13 @@ void DiscoveredLink::timeout(const boost::system::error_code& error) {
 	// If the code is operation_aborted it means that the timer
 	// was reset or cancelled.
 	if( error.value() == boost::asio::error::operation_aborted ) {
-		BOOST_LOG_TRIVIAL(trace) << *this << " link liveness timer cancelled";
+		BOOST_LOG_TRIVIAL(trace) << *this <<
+			" link liveness timer cancelled";
 		return;
 	}
 	else if( error ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " link liveness timer error: " << error.message();
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" link liveness timer error: " << error.message();
 		return;
 	}
 

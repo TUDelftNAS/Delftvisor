@@ -31,10 +31,12 @@ void OpenflowConnection::handle_network_error(
 	case boost::asio::error::eof:
 		// If the other side gives up stop this connection
 		stop();
-		BOOST_LOG_TRIVIAL(trace) << *this << " connection was " << error.message();
+		BOOST_LOG_TRIVIAL(trace) << *this <<
+			" connection was " << error.message();
 		break;
 	default:
-		BOOST_LOG_TRIVIAL(error) << *this << " has network problem: " << error.message();
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" has network problem: " << error.message();
 	}
 }
 
@@ -52,6 +54,8 @@ void OpenflowConnection::start() {
 }
 
 void OpenflowConnection::stop() {
+	// socket.shutdown() should be called for graceful closure according to
+	// http://www.boost.org/doc/libs/1_58_0/doc/html/boost_asio/reference/basic_stream_socket/close/overload1.html
 	// Closing the socket stops all socket actions
 	socket.close();
 

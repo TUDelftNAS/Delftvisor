@@ -162,7 +162,8 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 
 	// If this doesn't use the slice reserved for topology discovery
 	if( slice != vlan_tag::max_slice_id ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " received topology discovery packet in with wrong slice: " << slice;
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" received topology discovery packet in with wrong slice: " << slice;
 		return;
 	}
 
@@ -182,7 +183,8 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 		auto switch_2_pointer = hypervisor
 			->get_physical_switch(switch_num);
 		if( switch_2_pointer == nullptr ) {
-			BOOST_LOG_TRIVIAL(error) << discovered_link << " cannot construct link to not existing switch";
+			BOOST_LOG_TRIVIAL(error) << discovered_link <<
+				" cannot construct link to not existing switch";
 			return;
 		}
 		this->add_link( discovered_link );

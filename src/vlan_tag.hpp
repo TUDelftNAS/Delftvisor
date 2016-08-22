@@ -37,7 +37,10 @@ namespace vlan_tag {
 	 * VLAN tags.
 	 */
 	class Id {
-		uint32_t tag, mask;
+		/// The actual bits
+		uint32_t tag;
+		/// The mask
+		uint32_t mask;
 
 		Id(uint32_t tag) :
 			tag(tag),
@@ -69,7 +72,7 @@ namespace vlan_tag {
 		}
 
 		void set_is_port_tag(int is_port_tag_bit) {
-			tag  |= (is_port_tag_bit&1)         << is_port_tag_offset;
+			tag  |= (is_port_tag_bit&1)             << is_port_tag_offset;
 			mask |= make_mask(num_is_port_tag_bits) << is_port_tag_offset;
 		}
 		void set_slice(int slice_id) {
@@ -95,8 +98,8 @@ namespace vlan_tag {
 		void add_to_match(fluid_msg::of13::FlowMod& flowmod) const {
 			uint32_t vid_tag  = tag        & make_mask(12);
 			uint32_t vid_mask = mask       & make_mask(12);
-			uint32_t pcp_tag  = (tag>>12)  & make_mask(3);
-			uint32_t pcp_mask = (mask>>12) & make_mask(3);
+			uint32_t pcp_tag  = (tag>>12)  & make_mask( 3);
+			uint32_t pcp_mask = (mask>>12) & make_mask( 3);
 
 			flowmod.add_oxm_field(
 				new fluid_msg::of13::VLANVid(
