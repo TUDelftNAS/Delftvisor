@@ -50,20 +50,22 @@ void PhysicalSwitch::remove_port_interest(
 	needed_ports.at(port).erase(switch_pointer);
 }
 
+void PhysicalSwitch::send_request_message(
+		fluid_msg::OFMsg& message,
+		boost::weak_ptr<VirtualSwitch> virtual_switch) {
+	uint32_t xid = send_message(message);
+	xid_map[xid].original_xid   = message.xid();
+	xid_map[xid].virtual_switch = virtual_switch;
+}
+
 void PhysicalSwitch::start() {
 	// Start up the generic connection handling
 	OpenflowConnection::start();
 
 	// Send an featuresrequest
-	fluid_msg::of13::FeaturesRequest features_message;
-	send_message( features_message );
-
-	// Request ports via multipart
 	{
-		fluid_msg::of13::MultipartRequestPortDescription port_description_message(
-			0, // The xid will be set send_message
-			0); // The only flag is the more the flag indicating more messages follow
-		send_message( port_description_message );
+		fluid_msg::of13::FeaturesRequest features_message;
+		send_message( features_message );
 	}
 
 	// Request information about the meters via multipart
@@ -80,6 +82,14 @@ void PhysicalSwitch::start() {
 			0, // The xid will be set send_message
 			0); // The only flag is the more the flag indicating more messages follow
 		send_message( information_message );
+	}
+
+	// Request ports via multipart
+	{
+		fluid_msg::of13::MultipartRequestPortDescription port_description_message(
+			0, // The xid will be set send_message
+			0); // The only flag is the more the flag indicating more messages follow
+		send_message( port_description_message );
 	}
 
 	// Create the rest of the initial rules
@@ -114,7 +124,10 @@ void PhysicalSwitch::stop() {
 		if( link != nullptr ) link->stop();
 	}
 
-	// TODO check_online for all virtual_switches that depend on this one
+	// Let the entire network recalculate, this is done to assure
+	// that a virtual switch that only depended on this switch also
+	// gets stopped.
+	hypervisor->calculate_routes();
 
 	BOOST_LOG_TRIVIAL(info) << *this << " stopped";
 }
