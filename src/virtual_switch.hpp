@@ -3,7 +3,6 @@
 #include <unordered_map>
 
 #include <boost/asio.hpp>
-#include <boost/enable_shared_from_this.hpp>
 
 #include "openflow_connection.hpp"
 
@@ -16,6 +15,12 @@ private:
 	/// The datpath id of this switch
 	uint64_t datapath_id;
 
+	/// The hypervisor this virtual switch belongs to
+	Hypervisor * hypervisor;
+
+	/// The slice this virtual switch belongs to
+	Slice* slice;
+
 	/// The current state of this switch connection
 	enum {
 		down,
@@ -23,19 +28,20 @@ private:
 		connected
 	} state;
 
-	/// A virtual port
-	struct VirtualPort {
-		uint64_t datapath_id;
-		uint32_t port_number;
-	};
-	/// The virtual ports on this switch
-	std::unordered_map<uint32_t,VirtualPort> ports;
-
-	/// The hypervisor this virtual switch belongs to
-	Hypervisor * hypervisor;
-
-	/// The slice this virtual switch belongs to
-	Slice* slice;
+	/// The map with all the port id's
+	/**
+	 * physical_dpid -> (virtual_port_no -> physical_port_no)
+	 */
+	std::unordered_map<
+		uint64_t,
+		std::unordered_map<
+			uint32_t,
+			uint32_t>> dependent_switches;
+	/// The physical dpid that contains a virtual port
+	/**
+	 * virtual_port_no -> physical_dpid
+	 */
+	std::unordered_map<uint32_t,uint64_t> port_to_dependent_switch;
 
 	/// The timer used to backoff between connection attempts
 	boost::asio::deadline_timer connection_backoff_timer;
@@ -64,7 +70,7 @@ public:
 	void add_port(
 		uint32_t port_number,
 		uint64_t physical_datapath_id,
-		uint32_t physical_port_id);
+		uint32_t physical_port_number);
 	/// Remove a port from this virtual switch
 	void remove_port(uint32_t port_number);
 

@@ -24,13 +24,25 @@ VirtualSwitch::VirtualSwitch(
 void VirtualSwitch::add_port(
 		uint32_t port_number,
 		uint64_t physical_datapath_id,
-		uint32_t physical_port_id) {
-	ports[port_number].datapath_id = physical_datapath_id;
-	ports[port_number].port_number = physical_port_id;
+		uint32_t physical_port_number) {
+	// Store the lookup link
+	port_to_dependent_switch
+		[physical_datapath_id] = port_number;
+	dependent_switches
+		[physical_datapath_id]
+		[port_number] = physical_port_number;
 }
 
 void VirtualSwitch::remove_port(uint32_t port_number) {
-	ports.erase(port_number);
+	// Remove from the port_to_dependent_switch structure
+	uint64_t physical_dpid = port_to_dependent_switch.at(port_number);
+	port_to_dependent_switch.erase(port_number);
+
+	// Remove from dependent_switches
+	dependent_switches.at(physical_dpid).erase(port_number);
+	if( dependent_switches.at(physical_dpid).size() == 0 ) {
+		dependent_switches.erase(physical_dpid);
+	}
 }
 
 void VirtualSwitch::try_connect() {
@@ -116,20 +128,20 @@ void VirtualSwitch::check_online() {
 	bool all_online_and_reachable = true;
 	PhysicalSwitch::pointer first_switch = nullptr;
 
-	for( auto& port : ports ) {
-		// Lookup the PhysicalSwitch that owns this port
+	for( auto& dep_sw : dependent_switches ) {
+		// Lookup the PhysicalSwitch via the hypervisor
 		auto switch_ptr = hypervisor
 			->get_physical_switch_by_datapath_id(
-				port.second.datapath_id);
+				dep_sw.first);
 
-		// TODO Make sure the physical switch actually has the
-		// port that is referred to
-
-		// and make sure that switch is online
+		// Make sure that switch is online
 		if( switch_ptr == nullptr ) {
 			all_online_and_reachable = false;
 			break;
 		}
+
+		// TODO Make sure the physical switch actually has
+		// all the ports that are asked of it
 
 		if( first_switch == nullptr ) {
 			// Set the current PhysicalSwitch in the first_switch
@@ -167,8 +179,45 @@ void VirtualSwitch::handle_error(fluid_msg::of13::Error& error_message) {
 	// TODO
 }
 void VirtualSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received error";
-	// TODO
+	// Lookup the features of all switches below
+	uint32_t n_buffers    = UINT32_MAX;
+	uint8_t n_tables      = UINT8_MAX;
+	uint32_t capabilities = UINT32_MAX;
+
+	for( auto& dep_sw : dependent_switches ) {
+		auto phy_sw = hypervisor
+			->get_physical_switch_by_datapath_id(
+				dep_sw.first);
+
+		if( phy_sw == nullptr ) {
+			BOOST_LOG_TRIVIAL(error) << *this <<
+				" not all switches online?";
+		}
+
+		const auto& features = phy_sw->get_features();
+		n_buffers = std::min( n_buffers, features.n_buffers );
+		n_tables = std::min( n_tables, features.n_tables );
+		capabilities &= features.capabilities;
+	}
+
+	// We reserve 2 tables for the hypervisor
+	n_tables -= 2;
+	// Statistics are not supported in this version of the hypervisor
+	capabilities &= fluid_msg::of13::OFPC_IP_REASM | fluid_msg::of13::OFPC_PORT_BLOCKED;
+
+	// Create the response message
+	fluid_msg::of13::FeaturesReply features_reply(
+		features_request_message.xid(),
+		datapath_id,
+		n_buffers,
+		n_tables,
+		0, // Auxiliary id
+		capabilities);
+
+	// Send the message response
+	send_message_response(features_reply);
+
+	BOOST_LOG_TRIVIAL(info) << *this << " received features_request";
 }
 void VirtualSwitch::handle_features_reply(fluid_msg::of13::FeaturesReply& features_reply_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received features_reply it shouldn't";
