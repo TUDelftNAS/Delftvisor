@@ -2,6 +2,7 @@
 #include "virtual_switch.hpp"
 #include "hypervisor.hpp"
 #include "discoveredlink.hpp"
+#include "slice.hpp"
 
 #include "vlan_tag.hpp"
 
@@ -29,7 +30,11 @@ int PhysicalSwitch::get_id() const {
 	return id;
 }
 
-const std::unordered_map<uint32_t,PhysicalSwitch::PhysicalPort>& PhysicalSwitch::get_ports() const
+const struct PhysicalSwitch::Features& PhysicalSwitch::get_features() const {
+	return features;
+}
+
+const std::unordered_map<uint32_t,PhysicalSwitch::Port>& PhysicalSwitch::get_ports() const
 {
 	return ports;
 }
@@ -42,7 +47,7 @@ void PhysicalSwitch::register_port_interest(
 void PhysicalSwitch::remove_port_interest(
 		uint32_t port,
 		boost::shared_ptr<VirtualSwitch> switch_pointer) {
-	needed_ports[port].erase(switch_pointer);
+	needed_ports.at(port).erase(switch_pointer);
 }
 
 void PhysicalSwitch::start() {
@@ -95,6 +100,7 @@ void PhysicalSwitch::stop() {
 	// Stop the topology discovery
 	topology_discovery_timer.cancel();
 
+	// Remove this switch from the registry
 	if( state == unregistered ) {
 		hypervisor->unregister_physical_switch(id);
 	}
@@ -235,15 +241,20 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 		}
 	}
 
-
 	// Loop over the depended switches and make them check again
-	for( auto switch_pointer : needed_ports[port.port_no()] ) {
-		// TODO Rewrite the port number
-		// Set the port data with the rewritten port number into the port status message
-		port_status_message.desc( port );
+	auto switch_pointers = needed_ports.find(port.port_no());
+	if( switch_pointers != needed_ports.end() ) {
+		for( auto& switch_pointer : switch_pointers->second ) {
+			// Skip if this virtual switch is not online
+			if( !switch_pointer->is_connected() ) continue;
 
-		// Send the message to the virtual switch
-		switch_pointer->send_message(port_status_message);
+			// TODO Rewrite the port number
+			// Set the port data with the rewritten port number into the port status message
+			port_status_message.desc( port );
+
+			// Send the message to the virtual switch
+			switch_pointer->send_message(port_status_message);
+		}
 	}
 }
 
@@ -267,7 +278,7 @@ int PhysicalSwitch::get_distance(int switch_id) {
 		return topology::infinite;
 	}
 	else {
-		return dist[switch_id];
+		return dist.at(switch_id);
 	}
 }
 void PhysicalSwitch::set_distance(int switch_id, int distance) {
@@ -279,7 +290,7 @@ uint32_t PhysicalSwitch::get_next(int switch_id) {
 		return UINT32_MAX;
 	}
 	else {
-		return next[switch_id];
+		return next.at(switch_id);
 	}
 }
 void PhysicalSwitch::set_next(int switch_id, uint32_t port_number) {

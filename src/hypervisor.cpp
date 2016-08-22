@@ -61,7 +61,7 @@ void Hypervisor::handle_accept(
 				this));
 
 		// And start the physical switch
-		physical_switches[id]->start();
+		physical_switches.at(id)->start();
 
 		// Start waiting for the next connection
 		start_accept();
@@ -82,7 +82,7 @@ void Hypervisor::unregister_physical_switch(int switch_id) {
 }
 void Hypervisor::unregister_physical_switch(uint64_t datapath_id, int switch_id) {
 	datapath_id_to_switch_id.erase(datapath_id);
-	physical_switches.erase(switch_id);
+	unregister_physical_switch(switch_id);
 }
 
 PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) const {
@@ -152,14 +152,14 @@ void Hypervisor::stop() {
 	physical_switches.clear();
 
 	// Stop all of the slices
-	for( Slice s : slices ) s.stop();
+	for( Slice& s : slices ) s.stop();
 	// and delete all the virtual switch shared pointers
 	slices.clear();
 }
 
 void Hypervisor::calculate_routes() {
 	// Reset all switches to start values
-	for( auto phy_switch : physical_switches ) {
+	for( auto& phy_switch : physical_switches ) {
 		phy_switch.second->reset_distances();
 	}
 
