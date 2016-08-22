@@ -174,11 +174,16 @@ VirtualSwitch::pointer VirtualSwitch::shared_from_this() {
 			OpenflowConnection::shared_from_this());
 }
 
+void VirtualSwitch::print_to_stream(std::ostream& os) const {
+	os << "[Virtual switch dpid=" << datapath_id << ", state=" << (state==down?"down":(state==try_connecting?"try_connecting":"connected")) << "]";
+}
+
 void VirtualSwitch::handle_error(fluid_msg::of13::Error& error_message) {
 	BOOST_LOG_TRIVIAL(error) << *this
 		<< " received error Type=" << error_message.err_type()
 		<< " Code=" << error_message.code();
 }
+
 void VirtualSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& features_request_message) {
 	// Lookup the features of all switches below
 	uint32_t n_buffers    = UINT32_MAX;
@@ -221,31 +226,6 @@ void VirtualSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& fe
 	BOOST_LOG_TRIVIAL(info) << *this << " received features_request";
 }
 
-void VirtualSwitch::handle_config_request(fluid_msg::of13::GetConfigRequest& config_request_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received get_config_request";
-
-	// Officially this should be supported, say permission denied
-	// so the controller at least knows that it is not happening
-	fluid_msg::of13::Error error_message(
-			config_request_message.xid(),
-			fluid_msg::of13::OFPET_BAD_REQUEST,
-			fluid_msg::of13::OFPBRC_EPERM
-		);
-	send_message_response(error_message);
-}
-void VirtualSwitch::handle_set_config(fluid_msg::of13::SetConfig& set_config_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received set_config";
-
-	// Officially this should be supported, say permission denied
-	// so the controller at least knows that it is not happening
-	fluid_msg::of13::Error error_message(
-			set_config_message.xid(),
-			fluid_msg::of13::OFPET_BAD_REQUEST,
-			fluid_msg::of13::OFPBRC_EPERM
-		);
-	send_message_response(error_message);
-}
-
 void VirtualSwitch::handle_barrier_request(fluid_msg::of13::BarrierRequest& barrier_request_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received barrier_request";
 	// TODO
@@ -277,58 +257,8 @@ void VirtualSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_messag
 	// TODO
 }
 
-void VirtualSwitch::handle_queue_config_request(fluid_msg::of13::QueueGetConfigRequest& queue_config_request) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received queue_get_config_request";
-
-	// Queue configuration is beyond the current scope of this project,
-	// respond with permission denied so the controller at least knows
-	// that it is not happening
-	fluid_msg::of13::Error error_message(
-			queue_config_request.xid(),
-			fluid_msg::of13::OFPET_QUEUE_OP_FAILED,
-			fluid_msg::of13::OFPQOFC_EPERM
-		);
-	send_message_response(error_message);
+void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::MultipartRequestPortDescription& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received multipart_request_port_description";
+	// TODO
 }
 
-void VirtualSwitch::handle_role_request(fluid_msg::of13::RoleRequest& role_request_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received role_request";
-
-	// Respond with an error message explaining role request
-	// is unsupported
-	fluid_msg::of13::Error error_message(
-			role_request_message.xid(),
-			fluid_msg::of13::OFPET_ROLE_REQUEST_FAILED,
-			fluid_msg::of13::OFPRRFC_UNSUP
-		);
-	send_message_response(error_message);
-}
-
-void VirtualSwitch::handle_get_async_request(fluid_msg::of13::GetAsyncRequest& async_request_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received get_async_request";
-
-	// Officially this should be supported, say permission denied
-	// so the controller at least knows that it is not happening
-	fluid_msg::of13::Error error_message(
-			async_request_message.xid(),
-			fluid_msg::of13::OFPET_BAD_REQUEST,
-			fluid_msg::of13::OFPBRC_EPERM
-		);
-	send_message_response(error_message);
-}
-void VirtualSwitch::handle_set_async(fluid_msg::of13::SetAsync& set_async_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received set_async";
-
-	// Officially this should be supported, say permission denied
-	// so the controller at least knows that it is not happening
-	fluid_msg::of13::Error error_message(
-			set_async_message.xid(),
-			fluid_msg::of13::OFPET_BAD_REQUEST,
-			fluid_msg::of13::OFPBRC_EPERM
-		);
-	send_message_response(error_message);
-}
-
-void VirtualSwitch::print_to_stream(std::ostream& os) const {
-	os << "[Virtual switch dpid=" << datapath_id << ", state=" << (state==down?"down":(state==try_connecting?"try_connecting":"connected")) << "]";
-}

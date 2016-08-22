@@ -154,6 +154,8 @@ public:
 	uint32_t send_message(fluid_msg::OFMsg& message);
 	/// Send a message over this connection without rewriting xid
 	void send_message_response(fluid_msg::OFMsg& message);
+	/// Send an error message as a response
+	void send_error_response(uint16_t err_type, uint16_t code, fluid_msg::OFMsg& message);
 
 	/// Print this connection to a stream
 	virtual void print_to_stream(std::ostream& os) const = 0;

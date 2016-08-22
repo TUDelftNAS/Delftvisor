@@ -525,6 +525,17 @@ void OpenflowConnection::send_message_response(fluid_msg::OFMsg& message) {
 	if( startup_send_chain ) send_message_queue_head();
 }
 
+void OpenflowConnection::send_error_response(uint16_t err_type, uint16_t code, fluid_msg::OFMsg& message) {
+	fluid_msg::of13::Error error_message(
+			message.xid(),
+			err_type,
+			code,
+			message.pack(),
+			message.length()
+		);
+	send_message_response(error_message);
+}
+
 void OpenflowConnection::send_message_queue_head() {
 	BOOST_LOG_TRIVIAL(trace) << *this << " sending message, current queue length: " << send_queue.size();
 
