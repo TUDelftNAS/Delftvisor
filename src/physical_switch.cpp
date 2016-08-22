@@ -228,7 +228,7 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 		// This is a new port we didn't know about
 		port_status_message.reason(fluid_msg::of13::OFPPR_ADD);
 		// Create the port structure
-		ports[port.port_no()].port_data = port_status_message.desc();
+		ports[port.port_no()].port_data = port;
 	}
 	else {
 		if( reason == fluid_msg::of13::OFPPR_DELETE ) {
@@ -333,7 +333,7 @@ void PhysicalSwitch::handle_config_reply(fluid_msg::of13::GetConfigReply& config
 	BOOST_LOG_TRIVIAL(info) << *this << " received get_config_reply";
 
 	features.flags         = config_reply_message.flags();
-	features.miss_send_len = config_reply_message.flags();
+	features.miss_send_len = config_reply_message.miss_send_len();
 }
 
 void PhysicalSwitch::handle_barrier_reply(fluid_msg::of13::BarrierReply& barrier_reply_message) {

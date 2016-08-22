@@ -27,7 +27,7 @@ void VirtualSwitch::add_port(
 		uint32_t physical_port_number) {
 	// Store the lookup link
 	port_to_dependent_switch
-		[physical_datapath_id] = port_number;
+		[port_number] = physical_datapath_id;
 	dependent_switches
 		[physical_datapath_id]
 		[port_number] = physical_port_number;
@@ -140,8 +140,18 @@ void VirtualSwitch::check_online() {
 			break;
 		}
 
-		// TODO Make sure the physical switch actually has
-		// all the ports that are asked of it
+		// Check that the physical switch actually contains all
+		// the ports that were asked of it
+		/*
+		const auto& phy_ports = switch_ptr->get_ports();
+		for( const auto& port : dep_sw.second ) {
+			if( phy_ports.find(port.first) == phy_ports.end() ) {
+				all_online_and_reachable = false;
+				break;
+			}
+		}
+		if( !all_online_and_reachable ) break;
+		*/
 
 		if( first_switch == nullptr ) {
 			// Set the current PhysicalSwitch in the first_switch
@@ -259,6 +269,41 @@ void VirtualSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_messag
 
 void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::MultipartRequestPortDescription& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received multipart_request_port_description";
-	// TODO
+
+	// Create the message
+	fluid_msg::of13::MultipartReplyPortDescription port_description;
+	port_description.xid(multipart_request_message.xid());
+
+	// Add all the port descriptions
+	for( const auto& port_pair : port_to_dependent_switch ) {
+		uint32_t port_no = port_pair.first;
+		uint32_t physical_port_no =
+			dependent_switches
+				.at(port_pair.second)
+					.at(port_no);
+
+		// Get the physical ports from the physical switch
+		auto& phy_ports =
+			hypervisor->
+				get_physical_switch_by_datapath_id(port_pair.second)
+					->get_ports();
+
+		// If the port we need exists in the physical switch add
+		// it to the port description message
+		const auto port_it = phy_ports.find(physical_port_no);
+		if( port_it != phy_ports.end() ) {
+			// Copy the port data from the physical switch
+			fluid_msg::of13::Port port_desc = port_it->second.port_data;
+
+			// Rewrite the port number to the virtual number
+			port_desc.port_no(port_no);
+
+			// Add the port to the port description message
+			port_description.add_port(port_desc);
+		}
+	}
+
+	// Send the message
+	send_message_response(port_description);
 }
 

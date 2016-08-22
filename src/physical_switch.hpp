@@ -34,7 +34,7 @@ private:
 		registered
 	} state;
 
-	struct {
+	struct Features {
 		/// The data in a features message
 		uint64_t datapath_id;
 		uint32_t n_buffers;
@@ -65,7 +65,7 @@ private:
 		boost::weak_ptr<VirtualSwitch> virtual_switch);
 
 	/// Represents a port on this switch as it is in the network below
-	struct PhysicalPort {
+	struct Port {
 		/// If this port has a link to another switch
 		boost::shared_ptr<DiscoveredLink> link;
 		/// The data concerning this port
@@ -74,7 +74,7 @@ private:
 	/// The ports attached to this switch, port_id -> port
 	std::unordered_map<
 		uint32_t,
-		PhysicalPort> ports;
+		Port> ports;
 	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
 	/**
 	 * This structure is separate since not necessarily already
@@ -129,8 +129,11 @@ public:
 	/// Get the internal id
 	int get_id() const;
 
+	/// Get the features of this switch
+	const struct Features& get_features() const;
+
 	/// Get the ports on this switch
-	const std::unordered_map<uint32_t,PhysicalPort>& get_ports() const;
+	const std::unordered_map<uint32_t,Port>& get_ports() const;
 
 	/// Register that a virtual switch wants to be notified
 	void register_port_interest(

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <unordered_map>
 
 #include <boost/asio.hpp>
@@ -41,7 +42,7 @@ private:
 	/**
 	 * virtual_port_no -> physical_dpid
 	 */
-	std::unordered_map<uint32_t,uint64_t> port_to_dependent_switch;
+	std::map<uint32_t,uint64_t> port_to_dependent_switch;
 
 	/// The timer used to backoff between connection attempts
 	boost::asio::deadline_timer connection_backoff_timer;
