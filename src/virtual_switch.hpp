@@ -50,10 +50,13 @@ private:
 	void backoff_expired(const boost::system::error_code& error);
 	/// Try to connect to the controller
 	void try_connect();
-	/// Tell this virtual switch to go down
-	void go_down();
 	/// The callback when the connection succeeds
 	void handle_connect(const boost::system::error_code& error);
+
+	/// Start this virtual switch, try to connect to the controller
+	void start();
+	/// Stop the controller connection of this virtual switch
+	void stop();
 public:
 	typedef boost::shared_ptr<VirtualSwitch> pointer;
 
@@ -84,12 +87,13 @@ public:
 	 */
 	void check_online();
 
-	/// Start this virtual switch, try to connect to the controller
-	void start();
-	/// Stop the controller connection of this virtual switch
-	void stop();
+	/// Tell this virtual switch to go down
+	void go_down();
 	/// Returns if this switch is currently connected
 	bool is_connected();
+
+	/// Print this virtual switch to a stream
+	void print_to_stream(std::ostream& os) const;
 
 	/// Handle openflow messages
 	void handle_error           (fluid_msg::of13::Error& error_message);
@@ -155,7 +159,4 @@ public:
 	void handle_multipart_reply_table_features(fluid_msg::of13::MultipartReplyTableFeatures& multipart_request_message);
 	void handle_multipart_reply_port_desc     (fluid_msg::of13::MultipartReplyPortDescription& multipart_request_message);
 	void handle_multipart_reply_experimenter  (fluid_msg::of13::MultipartReplyExperimenter& multipart_request_message);
-
-	/// Print this virtual switch to a stream
-	void print_to_stream(std::ostream& os) const;
 };

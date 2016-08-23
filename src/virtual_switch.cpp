@@ -105,16 +105,26 @@ void VirtualSwitch::stop() {
 		BOOST_LOG_TRIVIAL(info) << *this <<
 			" connection dropped, trying again";
 		try_connect();
-	}
-	else {
-		BOOST_LOG_TRIVIAL(error) << *this <<
-			" cannot stop since not connected";
+
+		// Register this virtual switch with the physical switches
+		for( const auto& dep_sw : dependent_switches ) {
+			for( const auto& port : dep_sw.second ) {
+				hypervisor->
+					get_physical_switch_by_datapath_id(dep_sw.first)
+						->remove_port_interest(
+								port.second,
+								shared_from_this());
+			}
+		}
 	}
 }
 
 void VirtualSwitch::go_down() {
-	state = down;
-	stop();
+	if( state != down ) {
+		BOOST_LOG_TRIVIAL(info) << *this << " going down";
+		state = down;
+		stop();
+	}
 }
 
 bool VirtualSwitch::is_connected() {
@@ -306,4 +316,3 @@ void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::Multipar
 	// Send the message
 	send_message_response(port_description);
 }
-

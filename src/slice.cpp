@@ -82,7 +82,7 @@ void Slice::stop() {
 
 	// Stop all virtual switches in this slice
 	for( auto& sw : virtual_switches ) {
-		sw.second->stop();
+		sw.second->go_down();
 	}
 }
 
