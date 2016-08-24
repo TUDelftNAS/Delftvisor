@@ -9,24 +9,37 @@
 			"max_rate"         : 500,
 			"virtual_switches" : [
 				{
-					"datapath_id"    : 1,
-					"physical_ports" : [
+					"datapath_id"    : 100,
+					"ports" : [
 						{
-							"datapath_id" : 1,
-							"ports"       : [1,2]
+							"virtual_port"         : 10,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 1
 						},
 						{
-							"datapath_id" : 3,
-							"ports"       : [1,2]
+							"virtual_port"         : 11,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 12,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 2
 						}
 					]
 				},
 				{
-					"datapath_id"    : 2,
-					"physical_ports" : [
+					"datapath_id"    : 200,
+					"ports" : [
 						{
-							"datapath_id" : 2,
-							"ports"       : [1,2,3]
+							"virtual_port"         : 20,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 21,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 2
 						}
 					]
 				}

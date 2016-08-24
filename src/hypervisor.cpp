@@ -230,7 +230,7 @@ void Hypervisor::load_configuration( std::string filename ) {
 
 	// Create the internal structure
 	for( const auto &slice_pair : config_tree.get_child("slices") ) {
-		auto slice_ptree = slice_pair.second;
+		auto& slice_ptree = slice_pair.second;
 
 		int max_rate   = slice_ptree.get<int>("max_rate");
 		std::string ip = slice_ptree.get_child("controller").get<std::string>("ip");
@@ -240,25 +240,30 @@ void Hypervisor::load_configuration( std::string filename ) {
 		Slice& slice = slices.back();
 
 		for( const auto &virtual_switch_pair : slice_ptree.get_child("virtual_switches") ) {
-			auto virtual_switch_ptree = virtual_switch_pair.second;
+			auto& virtual_switch_ptree = virtual_switch_pair.second;
 
 			uint64_t datapath_id = virtual_switch_ptree.get<uint64_t>("datapath_id");
-			slice.add_new_virtual_switch(switch_acceptor.get_io_service(), datapath_id);
+			slice.add_new_virtual_switch(
+					switch_acceptor.get_io_service(),
+					datapath_id);
 
-			VirtualSwitch::pointer virtual_switch = slice.get_virtual_switch_by_datapath_id(datapath_id);
-			uint32_t port_counter = 1;
+			VirtualSwitch::pointer virtual_switch =
+				slice.get_virtual_switch_by_datapath_id(datapath_id);
 
-			for( const auto &physical_port_pair : virtual_switch_ptree.get_child("physical_ports") ) {
-				auto physical_port_ptree = physical_port_pair.second;
+			for( const auto &port_pair : virtual_switch_ptree.get_child("ports") ) {
+				auto& port_ptree = port_pair.second;
 
-				uint64_t other_datapath_id = physical_port_ptree.get<uint64_t>("datapath_id");
+				uint32_t virtual_port         =
+					port_ptree.get<uint32_t>("virtual_port");
+				uint64_t physical_datapath_id =
+					port_ptree.get<uint64_t>("physical_datapath_id");
+				uint32_t physical_port        =
+					port_ptree.get<uint32_t>("physical_port");
 
-				for( const auto &port_pair : physical_port_ptree.get_child("ports") ) {
-					int port = port_pair.second.get<int>("");
-
-					virtual_switch->add_port(port_counter, other_datapath_id, port);
-					++port_counter;
-				}
+				virtual_switch->add_port(
+					virtual_port,
+					physical_datapath_id,
+					physical_port);
 			}
 		}
 	}
