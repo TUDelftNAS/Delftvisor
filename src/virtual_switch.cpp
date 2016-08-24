@@ -45,6 +45,20 @@ void VirtualSwitch::remove_port(uint32_t port_number) {
 	}
 }
 
+uint32_t VirtualSwitch::get_virtual_port_no(
+		uint64_t physical_datapath_id,
+		uint32_t physical_port_number) {
+	// TODO This is pretty stupid
+	for( const auto& phy_port : dependent_switches.at(physical_datapath_id) ) {
+		if( phy_port.second == physical_port_number ) {
+			return phy_port.first;
+		}
+	}
+	BOOST_LOG_TRIVIAL(error) << *this << " asked to translate dpid=" <<
+		physical_datapath_id << ", port_id=" << physical_port_number;
+	return UINT32_MAX;
+}
+
 void VirtualSwitch::try_connect() {
 	state = try_connecting;
 	socket.async_connect(
@@ -86,8 +100,22 @@ void VirtualSwitch::backoff_expired(
 
 void VirtualSwitch::start() {
 	if( state==try_connecting ) {
+		// Connection maintenance
 		OpenflowConnection::start();
 		state = connected;
+
+		// Register this virtual switch with the physical switches
+		for( const auto& dep_sw : dependent_switches ) {
+			auto sw_ptr =
+				hypervisor->
+					get_physical_switch_by_datapath_id(dep_sw.first);
+			for( const auto& port : dep_sw.second ) {
+				sw_ptr->register_port_interest(
+							port.second,
+							shared_from_this());
+			}
+		}
+
 		BOOST_LOG_TRIVIAL(info) << *this << " started";
 	}
 }
@@ -108,12 +136,13 @@ void VirtualSwitch::stop() {
 
 		// Register this virtual switch with the physical switches
 		for( const auto& dep_sw : dependent_switches ) {
-			for( const auto& port : dep_sw.second ) {
+			auto sw_ptr =
 				hypervisor->
-					get_physical_switch_by_datapath_id(dep_sw.first)
-						->remove_port_interest(
-								port.second,
-								shared_from_this());
+					get_physical_switch_by_datapath_id(dep_sw.first);
+			for( const auto& port : dep_sw.second ) {
+				sw_ptr->remove_port_interest(
+							port.second,
+							shared_from_this());
 			}
 		}
 	}

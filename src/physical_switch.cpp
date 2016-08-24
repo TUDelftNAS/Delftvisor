@@ -34,19 +34,20 @@ const struct PhysicalSwitch::Features& PhysicalSwitch::get_features() const {
 	return features;
 }
 
-const std::unordered_map<uint32_t,PhysicalSwitch::Port>& PhysicalSwitch::get_ports() const
-{
+const std::unordered_map<uint32_t,PhysicalSwitch::Port>& PhysicalSwitch::get_ports() const {
 	return ports;
 }
 
 void PhysicalSwitch::register_port_interest(
 		uint32_t port,
 		boost::shared_ptr<VirtualSwitch> switch_pointer) {
+	BOOST_LOG_TRIVIAL(trace) << *this << " interest was registered for port " << port;
 	needed_ports[port].insert(switch_pointer);
 }
 void PhysicalSwitch::remove_port_interest(
 		uint32_t port,
 		boost::shared_ptr<VirtualSwitch> switch_pointer) {
+	BOOST_LOG_TRIVIAL(trace) << *this << " interest was unregistered for port " << port;
 	needed_ports.at(port).erase(switch_pointer);
 }
 
@@ -257,13 +258,22 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 	// Loop over the depended switches and make them check again
 	auto switch_pointers = needed_ports.find(port.port_no());
 	if( switch_pointers != needed_ports.end() ) {
+		BOOST_LOG_TRIVIAL(trace) << *this << "PortStatus port=" << switch_pointers->first << " dep_sw_amount=" << switch_pointers->second.size();
+
 		for( auto& switch_pointer : switch_pointers->second ) {
 			// Skip if this virtual switch is not online
 			if( !switch_pointer->is_connected() ) continue;
 
-			// TODO Rewrite the port number
+			BOOST_LOG_TRIVIAL(trace) << *this << "\tPortStatus dpid=" << features.datapath_id << ", port_no=" << port.port_no();
+
+			// Rewrite the port number
+			port.port_no(
+				switch_pointer->
+					get_virtual_port_no(features.datapath_id,port.port_no()));
 			// Set the port data with the rewritten port number into the port status message
 			port_status_message.desc( port );
+
+			BOOST_LOG_TRIVIAL(trace) << *this << "\tPortStatus rewritten port_no=" << port.port_no();
 
 			// Send the message to the virtual switch
 			switch_pointer->send_message(port_status_message);

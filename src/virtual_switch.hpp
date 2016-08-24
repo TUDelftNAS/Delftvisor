@@ -77,6 +77,10 @@ public:
 		uint32_t physical_port_number);
 	/// Remove a port from this virtual switch
 	void remove_port(uint32_t port_number);
+	/// Get a virtual port number
+	uint32_t get_virtual_port_no(
+		uint64_t physical_datapath_id,
+		uint32_t physical_port_number);
 
 	/// Check if this switch should be started/stopped
 	/**
