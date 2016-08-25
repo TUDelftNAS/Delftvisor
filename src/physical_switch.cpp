@@ -194,32 +194,66 @@ void PhysicalSwitch::create_static_rules() {
 }
 
 void PhysicalSwitch::update_dynamic_rules() {
-	// Forward traffic between switches, if a packet comes
-	// in over a link with a connection to another switch
+	// Figure out what to do with traffic meant for a different switch
 	for( auto& switch_it : hypervisor->get_physical_switches() ) {
+		int other_id = switch_it.first;
 		// Forwarding to this switch makes no sense
-		if( switch_it.first == id ) continue;
+		if( other_id == id ) continue;
 
-		for( auto& port_it : ports ) {
-			// If this port doesn't have a link continue
-			if( port_it.second.link == nullptr ) continue;
+		// If there is no path to this switch
+		auto next_it        = next.find(other_id);
+		auto current_it     = current_next.find(other_id);
+		bool next_exists    = next_it==next.end();
+		bool current_exists = current_it==current_next.end();
 
-			// Create the flowmod
-			fluid_msg::of13::FlowMod flowmod;
-			flowmod.command(fluid_msg::of13::OFPFC_ADD);
-			flowmod.table_id(0);
+		// If this switch was and is unreachable skip this switch
+		if( !next_exists && !current_exists ) continue;
+		if(
+			next_exists && current_exists &&
+			next[other_id]==current_next[other_id]
+		) continue;
 
-			// Create the actions
-			fluid_msg::of13::WriteActions write_actions;
-			write_actions.add_action(
-				new fluid_msg::of13::OutputAction(
-					port_it.first,
-					fluid_msg::of13::OFPCML_NO_BUFFER));
-			flowmod.add_instruction(write_actions);
+		// If we arrived here we need to update something in the switch.
+		// Create the flowmod
+		fluid_msg::of13::FlowMod flowmod;
+		flowmod.table_id(1);
+		flowmod.priority(30);
+		flowmod.buffer_id(OFP_NO_BUFFER);
 
-			// Send the message
-			send_message(flowmod);
+		// Add the vlantag match field
+		VLANTag vlan_tag;
+		vlan_tag.set_is_port_tag(0);
+		vlan_tag.set_switch(other_id);
+		vlan_tag.add_to_match(flowmod);
+
+		uint8_t command;
+		if( !current_exists ) {
+			command = fluid_msg::of13::OFPFC_ADD;
 		}
+		else if( current_exists && next_exists ) {
+			command = fluid_msg::of13::OFPFC_MODIFY;
+		}
+		else {
+			command = fluid_msg::of13::OFPFC_DELETE;
+		}
+
+		flowmod.command(command);
+
+		// Tell the packet to output over the correct port
+		// TODO If dist[other_id] == 1 add pop_vlan
+		fluid_msg::of13::WriteActions write_actions;
+		write_actions.add_action(
+			new fluid_msg::of13::OutputAction(
+				next[other_id],
+				fluid_msg::of13::OFPCML_NO_BUFFER));
+		if( dist[other_id] == 1 ) {
+			write_actions.add_action(
+				new fluid_msg::of13::PopVLANAction());
+		}
+		flowmod.add_instruction(write_actions);
+
+		// Send the message
+		send_message(flowmod);
 	}
 
 	// Forward new packets to the personal flowtables

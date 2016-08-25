@@ -18,9 +18,9 @@ void PhysicalSwitch::make_topology_discovery_rule() {
 	flowmod.buffer_id(OFP_NO_BUFFER);
 
 	// Create the match
-	vlan_tag::Id vlan_id;
-	vlan_id.set_slice(vlan_tag::max_slice_id);
-	vlan_id.add_to_match(flowmod);
+	VLANTag vlan_tag;
+	vlan_tag.set_slice(VLANTag::max_slice_id);
+	vlan_tag.add_to_match(flowmod);
 
 	// Create the action
 	fluid_msg::of13::WriteActions write_actions;
@@ -88,21 +88,21 @@ void PhysicalSwitch::send_topology_discovery_message(
 	uint32_t port_number = it->first;
 
 	// Create the data and mask with the slice/switch/port information
-	vlan_tag::Id vlan_id_1;
-	vlan_id_1.set_is_port_tag(0);
-	vlan_id_1.set_slice(vlan_tag::max_slice_id);
-	vlan_id_1.set_switch(id);
-	vlan_tag::Id vlan_id_2;
-	vlan_id_2.set_is_port_tag(1);
-	vlan_id_2.set_slice(vlan_tag::max_slice_id);
-	vlan_id_2.set_switch(port_number);
-	uint16_t vlan_id_1_raw = vlan_id_1.make_raw();
-	uint16_t vlan_id_2_raw = vlan_id_2.make_raw();
+	VLANTag vlan_tag_1;
+	vlan_tag_1.set_is_port_tag(0);
+	vlan_tag_1.set_slice(VLANTag::max_slice_id);
+	vlan_tag_1.set_switch(id);
+	VLANTag vlan_tag_2;
+	vlan_tag_2.set_is_port_tag(1);
+	vlan_tag_2.set_slice(VLANTag::max_slice_id);
+	vlan_tag_2.set_switch(port_number);
+	uint16_t vlan_tag_1_raw = vlan_tag_1.make_raw();
+	uint16_t vlan_tag_2_raw = vlan_tag_2.make_raw();
 	// Set the vlan values in the packet
-	topology_discovery_packet[14] = (vlan_id_1_raw>>8) & 0xff;
-	topology_discovery_packet[15] = vlan_id_1_raw & 0xff;
-	topology_discovery_packet[18] = (vlan_id_2_raw>>8) & 0xff;
-	topology_discovery_packet[19] = vlan_id_2_raw & 0xff;
+	topology_discovery_packet[14] = (vlan_tag_1_raw>>8) & 0xff;
+	topology_discovery_packet[15] = vlan_tag_1_raw & 0xff;
+	topology_discovery_packet[18] = (vlan_tag_2_raw>>8) & 0xff;
+	topology_discovery_packet[19] = vlan_tag_2_raw & 0xff;
 
 	// Create the packet out message
 	fluid_msg::of13::PacketOut packet_out;
@@ -145,9 +145,9 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 	EthernetHeader * packet = (EthernetHeader*) packet_in_message.data();
 	// Interpret the vlan tag disregarding endianness
 	uint16_t vlan_id_1_raw = packet->vlan_tag_1[0]*256+packet->vlan_tag_1[1];
-	vlan_tag::Id vlan_id_1 = vlan_tag::Id::create_from_raw(vlan_id_1_raw);
+	VLANTag vlan_id_1 = VLANTag::create_from_raw(vlan_id_1_raw);
 	uint16_t vlan_id_2_raw = packet->vlan_tag_2[0]*256+packet->vlan_tag_2[1];
-	vlan_tag::Id vlan_id_2 = vlan_tag::Id::create_from_raw(vlan_id_2_raw);
+	VLANTag vlan_id_2 = VLANTag::create_from_raw(vlan_id_2_raw);
 
 	// Extract the relevant information from the VLAN tag
 	int switch_num = vlan_id_1.get_switch();
@@ -161,7 +161,7 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 		<< "\t sw=" << switch_num << " sl=" << slice << " p=" << port;
 
 	// If this doesn't use the slice reserved for topology discovery
-	if( slice != vlan_tag::max_slice_id ) {
+	if( slice != VLANTag::max_slice_id ) {
 		BOOST_LOG_TRIVIAL(error) << *this <<
 			" received topology discovery packet in with wrong slice: " << slice;
 		return;
