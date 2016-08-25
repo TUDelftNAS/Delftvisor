@@ -250,8 +250,8 @@ void VirtualSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& fe
 		}
 
 		const auto& features = phy_sw->get_features();
-		n_buffers = std::min( n_buffers, features.n_buffers );
-		n_tables = std::min( n_tables, features.n_tables );
+		n_buffers     = std::min( n_buffers, features.n_buffers );
+		n_tables      = std::min( n_tables, features.n_tables );
 		capabilities &= features.capabilities;
 	}
 
@@ -344,4 +344,108 @@ void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::Multipar
 
 	// Send the message
 	send_message_response(port_description);
+}
+
+void VirtualSwitch::handle_multipart_request_group_features(fluid_msg::of13::MultipartRequestGroupFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received multipart request group features";
+
+	// Setup basic values for the group features
+	uint32_t types         = UINT32_MAX;
+	uint32_t capabilities  = UINT32_MAX;
+	uint32_t max_groups[4] = {UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+	uint32_t actions[4]    = {UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT32_MAX};
+
+	// Lookup the group features of all switches below and
+	// take the most restricting values so the features
+	// correspond to features all lower switches have.
+	for( auto& dep_sw : dependent_switches ) {
+		auto phy_sw = hypervisor
+			->get_physical_switch_by_datapath_id(
+				dep_sw.first);
+
+		if( phy_sw == nullptr ) {
+			BOOST_LOG_TRIVIAL(error) << *this <<
+				" not all switches online?";
+		}
+
+		// The get methods on GroupFeatures are not-const, so
+		// don't make this variable const or a reference
+		auto features = phy_sw->get_group_features();
+		types        &= features.types();
+		capabilities &= features.capabilities();
+		for( size_t i=0; i<4; ++i ) {
+			max_groups[i] = std::min( max_groups[i], features.max_groups()[i] );
+			actions[i]    = std::min( actions[i],    features.actions()[i] );
+		}
+	}
+
+	// TODO Remove hypervisor reserved groups from the max_groups
+
+	// Create the message
+	fluid_msg::of13::MultipartReplyGroupFeatures group_features;
+	group_features.xid(multipart_request_message.xid());
+
+	// Add the features to the group feature message
+	fluid_msg::of13::GroupFeatures features(
+			types,
+			capabilities,
+			max_groups,
+			actions);
+	group_features.features(features);
+
+	// Send the message
+	send_message_response(group_features);
+}
+
+void VirtualSwitch::handle_multipart_request_meter_features(fluid_msg::of13::MultipartRequestMeterFeatures& multipart_request_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received multipart request meter features";
+
+	// Setup basic values for the meter features
+	uint32_t max_meter    = UINT32_MAX;
+	uint32_t band_types   = UINT32_MAX;
+	uint32_t capabilities = UINT32_MAX;
+	uint8_t max_bands     = UINT8_MAX;
+	uint8_t max_color     = UINT8_MAX;
+
+	// Lookup the meter features of all switches below and
+	// take the most restricting values so the features
+	// correspond to features all lower switches have.
+	for( auto& dep_sw : dependent_switches ) {
+		auto phy_sw = hypervisor
+			->get_physical_switch_by_datapath_id(
+				dep_sw.first);
+
+		if( phy_sw == nullptr ) {
+			BOOST_LOG_TRIVIAL(error) << *this <<
+				" not all switches online?";
+		}
+
+		// The get methods on MeterFeatures are not-const, so
+		// don't make this variable const or a reference
+		auto features = phy_sw->get_meter_features();
+		max_meter     = std::min( max_meter, features.max_meter() );
+		band_types   &= features.band_types();
+		capabilities &= features.capabilities();
+		max_bands     = std::min( max_bands, features.max_bands() );
+		max_color     = std::min( max_color, features.max_color() );
+	}
+
+	// TODO Remove hypervisor reserved meters from the max_meter
+	//max_meter = std::min( 0, max_meter-num_slice);
+
+	// Create the message
+	fluid_msg::of13::MultipartReplyMeterFeatures meter_features;
+	meter_features.xid(multipart_request_message.xid());
+
+	// Add the features to the meter feature message
+	fluid_msg::of13::MeterFeatures features(
+			max_meter,
+			band_types,
+			capabilities,
+			max_bands,
+			max_color);
+	meter_features.meter_features(features);
+
+	// Send the message
+	send_message_response(meter_features);
 }

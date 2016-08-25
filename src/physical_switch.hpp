@@ -45,6 +45,11 @@ private:
 		uint16_t miss_send_len;
 	} features;
 
+	/// The meter features
+	fluid_msg::of13::MeterFeatures meter_features;
+	/// The group features
+	fluid_msg::of13::GroupFeatures group_features;
+
 	/// The information needed when forwarding a response
 	struct RequestSource {
 		uint32_t original_xid;
@@ -130,7 +135,11 @@ public:
 	int get_id() const;
 
 	/// Get the features of this switch
-	const struct Features& get_features() const;
+	const Features& get_features() const;
+	/// Get the group features of this switch
+	const fluid_msg::of13::GroupFeatures& get_group_features() const;
+	/// Get the meter features of this switch
+	const fluid_msg::of13::MeterFeatures& get_meter_features() const;
 
 	/// Get the ports on this switch
 	const std::unordered_map<uint32_t,Port>& get_ports() const;

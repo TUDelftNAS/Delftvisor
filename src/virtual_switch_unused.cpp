@@ -365,16 +365,6 @@ void VirtualSwitch::handle_multipart_request_group_desc(fluid_msg::of13::Multipa
 		fluid_msg::of13::OFPBRC_BAD_MULTIPART,
 		multipart_request_message);
 }
-void VirtualSwitch::handle_multipart_request_group_features(fluid_msg::of13::MultipartRequestGroupFeatures& multipart_request_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request group features it shouldn't";
-
-	// Send an error message explaining that his multipart
-	// message is unsupported
-	send_error_response(
-		fluid_msg::of13::OFPET_BAD_REQUEST,
-		fluid_msg::of13::OFPBRC_BAD_MULTIPART,
-		multipart_request_message);
-}
 void VirtualSwitch::handle_multipart_request_meter(fluid_msg::of13::MultipartRequestMeter& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request meter it shouldn't";
 
@@ -387,16 +377,6 @@ void VirtualSwitch::handle_multipart_request_meter(fluid_msg::of13::MultipartReq
 }
 void VirtualSwitch::handle_multipart_request_meter_config(fluid_msg::of13::MultipartRequestMeterConfig& multipart_request_message) {
 	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request meter config it shouldn't";
-
-	// Send an error message explaining that his multipart
-	// message is unsupported
-	send_error_response(
-		fluid_msg::of13::OFPET_BAD_REQUEST,
-		fluid_msg::of13::OFPBRC_BAD_MULTIPART,
-		multipart_request_message);
-}
-void VirtualSwitch::handle_multipart_request_meter_features(fluid_msg::of13::MultipartRequestMeterFeatures& multipart_request_message) {
-	BOOST_LOG_TRIVIAL(error) << *this << " received multipart request meter features it shouldn't";
 
 	// Send an error message explaining that his multipart
 	// message is unsupported

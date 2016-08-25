@@ -15,6 +15,7 @@ PhysicalSwitch::PhysicalSwitch(
 	:
 		OpenflowConnection::OpenflowConnection(socket),
 		topology_discovery_timer(socket.get_io_service()),
+		topology_discovery_port(0),
 		id(id),
 		hypervisor(hypervisor),
 		state(unregistered) {
@@ -32,6 +33,14 @@ int PhysicalSwitch::get_id() const {
 
 const struct PhysicalSwitch::Features& PhysicalSwitch::get_features() const {
 	return features;
+}
+
+const fluid_msg::of13::GroupFeatures& PhysicalSwitch::get_group_features() const {
+	return group_features;
+}
+
+const fluid_msg::of13::MeterFeatures& PhysicalSwitch::get_meter_features() const {
+	return meter_features;
 }
 
 const std::unordered_map<uint32_t,PhysicalSwitch::Port>& PhysicalSwitch::get_ports() const {
@@ -419,6 +428,8 @@ void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::Mult
 	}
 	// TODO Check if the switch supports all actions
 	// that the hypervisor needs per group
+
+	group_features = multipart_reply_message.features();
 }
 
 void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::MultipartReplyMeterFeatures& multipart_reply_message) {
@@ -429,6 +440,8 @@ void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::Mult
 	if( multipart_reply_message.meter_features().max_meter() < hypervisor->get_slices().size() ) {
 		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support enough meters";
 	}
+
+	meter_features = multipart_reply_message.meter_features();
 }
 
 void PhysicalSwitch::handle_multipart_reply_port_desc(fluid_msg::of13::MultipartReplyPortDescription& multipart_reply_message) {
