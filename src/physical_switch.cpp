@@ -190,7 +190,88 @@ void PhysicalSwitch::create_static_rules() {
 		send_message(meter_mod);
 	}
 
-	// Send a barrierrequest
+	// Create the rules for tenant packet-out to personal flowtable
+	for( const Slice& slice : hypervisor->get_slices() ) {
+		fluid_msg::of13::FlowMod flowmod;
+		flowmod.command(fluid_msg::of13::OFPFC_ADD);
+		flowmod.priority(20);
+		flowmod.table_id(0);
+		flowmod.cookie(slice.get_id());
+		flowmod.buffer_id(OFP_NO_BUFFER);
+
+		// Add the VLAN tag match
+		VLANTag vlan_tag;
+		vlan_tag.set_slice(slice.get_id());
+		vlan_tag.add_to_match(flowmod);
+		// Add the inport match
+		flowmod.add_oxm_field(
+			new fluid_msg::of13::InPort(
+				fluid_msg::of13::OFPP_CONTROLLER));
+
+		// Add the meter instruction
+		// TODO Conditionally try to add meter instruction?
+		//flowmod.add_instruction(
+		//	new fluid_msg::of13::Meter(
+		//		slice.get_id()+1));
+		// Pop the VLAN Tag between tables
+		fluid_msg::of13::ApplyActions apply_actions;
+		apply_actions.add_action(
+			new fluid_msg::of13::PopVLANAction());
+		flowmod.add_instruction(apply_actions);
+		// Goto the tenant tables
+		flowmod.add_instruction(
+			new fluid_msg::of13::GoToTable(2));
+		// Add the metadata write instruction
+		MetadataTag metadata_tag;
+		metadata_tag.set_group(0);
+		metadata_tag.set_slice(slice.get_id());
+		metadata_tag.add_to_instruction(flowmod);
+
+		// Send the message
+		send_message(flowmod);
+	}
+
+	// Create the rules that forward messages received over a
+	// shared link to the tentant tables
+	for( const Slice& slice : hypervisor->get_slices() ) {
+		fluid_msg::of13::FlowMod flowmod;
+		flowmod.command(fluid_msg::of13::OFPFC_ADD);
+		flowmod.priority(30);
+		flowmod.table_id(1);
+		flowmod.cookie(slice.get_id());
+		flowmod.buffer_id(OFP_NO_BUFFER);
+
+		// Add the VLAN tag match
+		VLANTag vlan_tag;
+		vlan_tag.set_is_port_tag(1);
+		vlan_tag.set_slice(slice.get_id());
+		vlan_tag.set_switch(VLANTag::max_port_id);
+		vlan_tag.add_to_match(flowmod);
+
+		// Add the meter instruction
+		// TODO Conditionally try to add meter instruction?
+		//flowmod.add_instruction(
+		//	new fluid_msg::of13::Meter(
+		//		slice.get_id()+1));
+		// Pop the VLAN Tag between tables
+		fluid_msg::of13::ApplyActions apply_actions;
+		apply_actions.add_action(
+			new fluid_msg::of13::PopVLANAction());
+		flowmod.add_instruction(apply_actions);
+		// Goto the tenant tables
+		flowmod.add_instruction(
+			new fluid_msg::of13::GoToTable(2));
+		// Add the metadata write instruction
+		MetadataTag metadata_tag;
+		metadata_tag.set_group(0);
+		metadata_tag.set_slice(slice.get_id());
+		metadata_tag.add_to_instruction(flowmod);
+
+		// Send the message
+		send_message(flowmod);
+	}
+
+	// TODO Send a barrierrequest
 }
 
 void PhysicalSwitch::update_dynamic_rules() {

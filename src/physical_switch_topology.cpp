@@ -14,7 +14,7 @@ void PhysicalSwitch::make_topology_discovery_rule() {
 	flowmod.command(fluid_msg::of13::OFPFC_ADD);
 	flowmod.table_id(0);
 	flowmod.cookie(1);
-	flowmod.priority(40);
+	flowmod.priority(30);
 	flowmod.buffer_id(OFP_NO_BUFFER);
 
 	// Create the match
