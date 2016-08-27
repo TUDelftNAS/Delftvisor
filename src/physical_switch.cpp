@@ -4,7 +4,7 @@
 #include "discoveredlink.hpp"
 #include "slice.hpp"
 
-#include "vlan_tag.hpp"
+#include "tag.hpp"
 
 #include <boost/log/trivial.hpp>
 

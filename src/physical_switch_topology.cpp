@@ -1,7 +1,8 @@
 #include "physical_switch.hpp"
 #include "discoveredlink.hpp"
 #include "hypervisor.hpp"
-#include "vlan_tag.hpp"
+
+#include "tag.hpp"
 
 #include <vector>
 
@@ -208,7 +209,8 @@ void PhysicalSwitch::add_link(boost::shared_ptr<DiscoveredLink> discovered_link)
 	uint32_t discovered_port = discovered_link->get_port_number(id);
 	auto it = ports.find(discovered_port);
 	if( it == ports.end() ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " tried to add link from a port that doesn't exist";
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" tried to add link from a port that doesn't exist";
 		discovered_link->stop();
 	}
 	else {
@@ -220,7 +222,8 @@ void PhysicalSwitch::reset_link(boost::shared_ptr<DiscoveredLink> discovered_lin
 	uint32_t discovered_port = discovered_link->get_port_number(id);
 	auto it = ports.find(discovered_port);
 	if( it == ports.end() ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " tried to remove link from a port that doesn't exist";
+		BOOST_LOG_TRIVIAL(error) << *this <<
+			" tried to remove link from a port that doesn't exist";
 	}
 	else {
 		it->second.link.reset();

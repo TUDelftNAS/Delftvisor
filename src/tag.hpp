@@ -111,3 +111,75 @@ public:
 		}
 	}
 };
+
+class MetadataTag {
+	uint64_t tag, mask;
+public:
+	MetadataTag() :
+		tag(0),
+		mask(0) {
+	}
+
+	/// Set the group in this tag
+	void set_group(int group_id) {
+		tag  |= (group_id&1);
+		mask |= 1;
+	}
+	/// Set the slice data in this tag
+	void set_slice(int slice_id) {
+		tag  |= (slice_id&make_mask(num_slice_bits)) << 1;
+		mask |= make_mask(num_slice_bits)            << 1;
+	}
+
+	/// Get the group bit in this tag
+	bool get_group() const {
+		return tag&1;
+	}
+	/// Get the slice in this tag
+	int get_slice() const {
+		return (tag>>1) & make_mask(num_slice_bits);
+	}
+
+	/// Add a match to this metadata to a flowmod message
+	/**
+	 * This function also checks if a match on metadata already
+	 * exists, if it exists it shifts the existing match to the
+	 * left to make room and adds the new metadata. If the
+	 * existing mask would be shifted out of the mask field
+	 * don't do anything and return that the operation has
+	 * failed.
+	 * \return If adding the match was successful
+	 */
+	bool add_to_match(fluid_msg::of13::FlowMod& flowmod) const {
+		fluid_msg::of13::OXMTLV* oxm = flowmod.get_oxm_field(
+				fluid_msg::of13::OFPXMT_OFB_METADATA);
+		// If there is an existing match on metadata
+		if( oxm != nullptr ) {
+			fluid_msg::of13::Metadata* existing_metadata =
+				(fluid_msg::of13::Metadata*) oxm;
+
+			// If the existing value is not masked can new
+			// data never be added
+			if( !existing_metadata->has_mask() ) {
+				return false;
+			}
+
+			// TODO Continue
+		}
+		return true;
+	}
+
+	/// Add a metadata tag instruction to this flowmod
+	/**
+	 * This function adds the instruction to the flowmod,
+	 * regardless if a write-metadata instruction already
+	 * exists.
+	 */
+	bool add_to_instruction(fluid_msg::of13::FlowMod& flowmod) const {
+		flowmod.add_instruction(
+			new fluid_msg::of13::WriteMetadata(
+				tag,
+				mask));
+		return true;
+	}
+};

@@ -2,7 +2,7 @@
 #include "discoveredlink.hpp"
 #include "slice.hpp"
 #include "physical_switch.hpp"
-#include "vlan_tag.hpp"
+#include "tag.hpp"
 
 #include <iostream>
 
