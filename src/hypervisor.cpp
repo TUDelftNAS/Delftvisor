@@ -109,7 +109,7 @@ const std::unordered_map<int,PhysicalSwitch::pointer>& Hypervisor::get_physical_
 	return physical_switches;
 }
 /// Get slices
-const std::vector<Slice>& Hypervisor::get_slices() const {
+const std::list<Slice>& Hypervisor::get_slices() const {
 	return slices;
 }
 

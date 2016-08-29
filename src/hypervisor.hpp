@@ -19,7 +19,7 @@ private:
 	boost::asio::ip::tcp::acceptor switch_acceptor;
 
 	/// The slices in this hypervisor
-	std::vector<Slice> slices;
+	std::list<Slice> slices;
 
 	/// The allocator for physical switch id's
 	IdAllocator physical_switch_id_allocator;
@@ -61,7 +61,7 @@ public:
 	/// Get the physical switches in the hypervisor
 	const std::unordered_map<int,PhysicalSwitch::pointer>& get_physical_switches() const;
 	/// Get slices
-	const std::vector<Slice>& get_slices() const;
+	const std::list<Slice>& get_slices() const;
 
 	/// Register a physical switch
 	void register_physical_switch(uint64_t datapath_id,int switch_id);
