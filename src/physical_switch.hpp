@@ -89,6 +89,14 @@ private:
 		uint32_t,
 		std::set<boost::shared_ptr<VirtualSwitch>>> needed_ports;
 
+	/// Save per port what rule in the first flow table is pushed
+	enum PortState {
+		link,
+		host,
+		down
+	};
+	std::unordered_map<uint32_t,PortState> ports_state;
+
 	/// Handle information about a port we received
 	/**
 	 * Two messages contain port information, the PortStatus
@@ -177,7 +185,7 @@ public:
 	/// Set the port to forward traffic over to get to a switch
 	void set_next(int switch_id, uint32_t port_number);
 
-	/// Update the dynamic rules after the topology has change
+	/// Update the dynamic rules after the topology has changed
 	void update_dynamic_rules();
 
 	/// The message handling functions

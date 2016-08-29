@@ -119,8 +119,8 @@ Priority | Purpose | Amount | Cookie | Match | Instructions
 30 | Forward message over shared link to slice flowtable | # of slice | slice id | vlan-is-port=1, vlan-slice-bits=z, vlan-port-bits=max-port | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-slice-bits, goto-tbl(2)
 20 | Forward message to other switch | # of switches - 1 | switch id | vlan-is-port-tag=0, vlan-switch-bits=z | output(a)
 20 | Forward message to other switch that is 1 hop away | # of switches - 1 | switch id | vlan-is-port-tag=0, vlan-switch-bits=z | pop-vlan, output(a)
-10 | Output preprocessed message over port without link | # of ports without link | port | vlan-is-port-tag=1, vlan-port-bits=z  | pop-vlan, output(a)
-10 | Output preprocessed message over port with link | # of ports with link | port | vlan-is-port-tag=1, vlan-port-bits=z  | vlan-port-bits=max-port, output(a)
+10 | Output preprocessed message over port without link | # of ports without link \* # of slices | port + (slice>>7) | vlan-is-port-tag=1, vlan-slice-bits=y, vlan-port-bits=z  | pop-vlan, output(a)
+10 | Output preprocessed message over port with link | # of ports with link \* # of slices | port + (slice>>7) | vlan-is-port-tag=1, vlan-slice-bits=y, vlan-port-bits=z  | vlan-is-port-tag=1, vlan-slice-bits=y, vlan-port-bits=max-port, output(a)
  0 | Error detection rule | 1 | 3 | \* | output(controller)
 
 ## Table n | n>=2, tenant tables

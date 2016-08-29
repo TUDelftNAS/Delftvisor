@@ -70,6 +70,8 @@ public:
 		Hypervisor* hypervisor,
 		Slice* slice);
 
+	const Slice* get_slice() const;
+
 	/// Add a port to this virtual switch
 	void add_port(
 		uint32_t port_number,

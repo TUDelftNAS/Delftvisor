@@ -275,6 +275,149 @@ void PhysicalSwitch::create_static_rules() {
 }
 
 void PhysicalSwitch::update_dynamic_rules() {
+	BOOST_LOG_TRIVIAL(info) << *this << " updating dynamic flow rules";
+
+	// Update the port rules, there are 2 set of rules that are maintained
+	// here. The rules in table 0 with priority 10 determining what to do
+	// with packets that arrive over a certain link and the rules in table 1
+	// with priority 10 determining what to do with packets that have
+	// arrived over a link and want to be send out over a port on this switch.
+	for( const auto& port_pair : ports ) {
+		// Alias the values that are iterated over
+		const uint32_t& port_no = port_pair.first;
+		const Port& port = port_pair.second;
+
+		// Start building the message to update table 0
+		fluid_msg::of13::FlowMod flowmod_0;
+		flowmod_0.priority(10);
+		flowmod_0.cookie(port_no);
+		flowmod_0.table_id(0);
+		flowmod_0.buffer_id(OFP_NO_BUFFER);
+
+		// Start building the message to update table 1
+		fluid_msg::of13::FlowMod flowmod_1;
+		flowmod_1.priority(10);
+		flowmod_1.table_id(1);
+		flowmod_1.buffer_id(OFP_NO_BUFFER);
+
+		// Determine what the current state of the forwarding rule
+		// should be.
+		PortState current_state;
+		// The slice id in case this port has state host
+		int slice_id;
+		if( port.link != nullptr ) {
+			// If this port has a link is that it's state
+			current_state = link;
+		}
+		else {
+			auto needed_it = needed_ports.find(port_no);
+			if(
+				needed_it!=needed_ports.end() &&
+				needed_it->second.size()==1
+			) {
+				// A port can only be a host port if exactly 1 virtual
+				// switch is interested in that port and it has no link
+				current_state = host;
+				// Extract what slice this virtual switch belongs to, there
+				// is likely a better way to extract something from a set if
+				// you know there is only 1 item, but this works
+				slice_id = (*(needed_it->second.begin()))->get_slice()->get_id();
+			}
+			else {
+				// In all other occasions this port should go down
+				current_state = down;
+			}
+		}
+
+		// Look what state this port had previously
+		auto prev_state_it = ports_state.find(port_no);
+		if( prev_state_it == ports_state.end() ) {
+			// There is no rule known about this port
+			flowmod_0.command(fluid_msg::of13::OFPFC_ADD);
+			flowmod_1.command(fluid_msg::of13::OFPFC_ADD);
+		}
+		else {
+			// If the state hasn't changed don't send any flowmod
+			if( prev_state_it->second == current_state ) {
+				continue;
+			}
+			flowmod_0.command(fluid_msg::of13::OFPFC_MODIFY);
+			flowmod_1.command(fluid_msg::of13::OFPFC_MODIFY);
+		}
+
+		// Save the updated state
+		ports_state[port_no] = current_state;
+
+		BOOST_LOG_TRIVIAL(info) << *this << " updating port rule for port "
+			<< port_no << " to " << current_state;
+
+		// Add the in-port match to flowmod_0
+		flowmod_0.add_oxm_field(
+			new fluid_msg::of13::InPort(port_no));
+
+		// Add the necessary actions to flowmod_0
+		if( current_state == link ) {
+			flowmod_0.add_instruction(
+				new fluid_msg::of13::GoToTable(1));
+		}
+		else if( current_state == host ) {
+			// Add the meter instruction
+			// TODO Conditionally try to add meter instruction?
+			//flowmod_0.add_instruction(
+			//	new fluid_msg::of13::Meter(
+			//		slice_id+1));
+			// Goto the tenant tables
+			flowmod_0.add_instruction(
+				new fluid_msg::of13::GoToTable(2));
+			// Add the metadata write instruction
+			MetadataTag metadata_tag;
+			metadata_tag.set_group(0);
+			metadata_tag.set_slice(slice_id);
+			metadata_tag.add_to_instruction(flowmod_0);
+		}
+		else {
+			// If current_state==drop don't add any actions
+		}
+
+		// Send flowmod_0
+		send_message(flowmod_0);
+
+		// When outputting a message over a link we need to rewrite
+		// part of the VLAN Tag, unfortunately you cannot set only
+		// part of the tag so we need to create rules for each slice.
+		for( const Slice& slice : hypervisor->get_slices() ) {
+			// Copy the flowmod packet we have so far
+			fluid_msg::of13::FlowMod flowmod_1_copy(flowmod_1);
+			flowmod_1_copy.cookie(port_no | (slice.get_id()<<num_port_bits));
+
+			// Set the match for flowmod_1
+			VLANTag vlan_tag;
+			vlan_tag.set_is_port_tag(1);
+			vlan_tag.set_slice(slice.get_id());
+			vlan_tag.set_switch(port_no); // TODO Rewrite to internal port id
+			vlan_tag.add_to_match(flowmod_1_copy);
+
+			// Determine the actions for flowmod_1
+			fluid_msg::of13::WriteActions write_actions;
+			if( current_state == link ) {
+				write_actions.add_action(
+					new fluid_msg::of13::PopVLANAction());
+			}
+			else {
+				vlan_tag.set_switch(VLANTag::max_port_id);
+				vlan_tag.add_to_actions(write_actions);
+			}
+			write_actions.add_action(
+				new fluid_msg::of13::OutputAction(
+					port_no,
+					fluid_msg::of13::OFPCML_NO_BUFFER));
+			flowmod_1_copy.add_instruction(write_actions);
+
+			// Send flowmod_1
+			send_message(flowmod_1_copy);
+		}
+	}
+
 	// Figure out what to do with traffic meant for a different switch
 	for( auto& switch_it : hypervisor->get_physical_switches() ) {
 		int other_id = switch_it.first;
@@ -298,7 +441,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Create the flowmod
 		fluid_msg::of13::FlowMod flowmod;
 		flowmod.table_id(1);
-		flowmod.priority(30);
+		flowmod.priority(20);
 		flowmod.buffer_id(OFP_NO_BUFFER);
 
 		// Add the vlantag match field
@@ -317,7 +460,6 @@ void PhysicalSwitch::update_dynamic_rules() {
 		else {
 			command = fluid_msg::of13::OFPFC_DELETE;
 		}
-
 		flowmod.command(command);
 
 		// Tell the packet to output over the correct port
@@ -335,19 +477,6 @@ void PhysicalSwitch::update_dynamic_rules() {
 
 		// Send the message
 		send_message(flowmod);
-	}
-
-	// Forward new packets to the personal flowtables
-	for( auto& port : needed_ports ) {
-		// Check if the port exists, has a link and
-		// is needed by exactly 1 virtual switch
-		auto it = ports.find(port.first);
-		if(
-			it!=ports.end() &&
-			it->second.link==nullptr &&
-			port.second.size()==1 ) {
-			// Create a flow rule that meters and forwards the packet
-		}
 	}
 }
 
@@ -410,7 +539,7 @@ void PhysicalSwitch::reset_distances() {
 	next.clear();
 
 	// Loop over the links and fill the dist and next maps
-	for( auto& port : ports ) {
+	for( const auto& port : ports ) {
 		if( port.second.link != nullptr ) {
 			int other_switch = port.second.link->get_other_switch_id(id);
 			set_distance(other_switch,1);
@@ -472,8 +601,15 @@ void PhysicalSwitch::handle_features_reply(fluid_msg::of13::FeaturesReply& featu
 	features.n_tables     = features_reply_message.n_tables();
 	features.capabilities = features_reply_message.capabilities();
 
+	// Register this physical switch at the hypervisor
 	hypervisor->register_physical_switch(features.datapath_id,id);
 	state = registered;
+
+	// This can potentially allow a virtual switch that only depends
+	// on this switch to come online. Execute check_online for all
+	// virtual switches.
+	//for( Slice& s : hypervisor->get_slices() ) s.check_online();
+	hypervisor->calculate_routes();
 }
 
 void PhysicalSwitch::handle_config_reply(fluid_msg::of13::GetConfigReply& config_reply_message) {
@@ -531,6 +667,9 @@ void PhysicalSwitch::handle_port_status(fluid_msg::of13::PortStatus& port_status
 	// The handle port function does all the important stuff
 	fluid_msg::of13::Port port = port_status_message.desc();
 	handle_port( port, port_status_message.reason() );
+
+	// Potentially a new port was added, update the dynamic rules
+	update_dynamic_rules();
 }
 
 void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::MultipartReplyGroupFeatures& multipart_reply_message) {
@@ -566,4 +705,7 @@ void PhysicalSwitch::handle_multipart_reply_port_desc(fluid_msg::of13::Multipart
 	for( fluid_msg::of13::Port& port : multipart_reply_message.ports() ) {
 		handle_port( port, fluid_msg::of13::OFPPR_ADD );
 	}
+
+	// Add the rules dropping/forwarding traffic about these new ports
+	update_dynamic_rules();
 }

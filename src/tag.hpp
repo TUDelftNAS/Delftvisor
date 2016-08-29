@@ -110,6 +110,24 @@ public:
 					pcp_tag));
 		}
 	}
+
+	/// Add the data contained in this VLANTag to an action set
+	/**
+	 * This function works both for WriteActions and ApplyActions.
+	 */
+	template<class ActionSet>
+	void add_to_actions(ActionSet& action_set) const {
+		uint32_t vid_tag = tag       & make_mask(12);
+		uint32_t pcp_tag = (tag>>12) & make_mask( 3);
+
+		action_set.add_action(
+			new fluid_msg::of13::SetFieldAction(
+				new fluid_msg::of13::VLANVid(
+					vid_tag | fluid_msg::of13::OFPVID_PRESENT)));
+		action_set.add_action(
+			new fluid_msg::of13::SetFieldAction(
+				new fluid_msg::of13::VLANPcp(pcp_tag)));
+	}
 };
 
 class MetadataTag {

@@ -21,6 +21,10 @@ VirtualSwitch::VirtualSwitch(
 		state(down) {
 }
 
+const Slice* VirtualSwitch::get_slice() const {
+	return slice;
+}
+
 void VirtualSwitch::add_port(
 		uint32_t port_number,
 		uint64_t physical_datapath_id,
@@ -114,6 +118,9 @@ void VirtualSwitch::start() {
 							port.second,
 							shared_from_this());
 			}
+			// Update the rules in the physical switch to forward
+			// packets from those ports to the actual flow tables
+			sw_ptr->update_dynamic_rules();
 		}
 
 		BOOST_LOG_TRIVIAL(info) << *this << " started";
