@@ -44,119 +44,47 @@ public:
 	static constexpr uint32_t max_switch_id = make_mask(num_switch_bits);
 	static constexpr uint32_t max_port_id   = make_mask(num_port_bits);
 
-	VLANTag() :
-		tag(0),
-		mask(0) {
-	}
+	VLANTag();
 
 	/// Create an VLAN id from the raw 2 byte
-	static VLANTag create_from_raw(uint16_t raw) {
-		// Remove the 12th bit, this is the CFI bit and is always 1
-		raw = (raw&make_mask(12)) |
-			((raw>>1)&(make_mask(3)<<12));
-
-		return VLANTag(raw);
-	}
+	static VLANTag create_from_raw(uint16_t raw);
 
 	/// Make the raw bytes as they go over the wire
-	uint16_t make_raw() const {
-		return (tag&make_mask(12)) |
-			(1<<12) |
-			((tag&(make_mask(3)<<12))<<1);
-	}
+	uint16_t make_raw() const;
 
-	void set_is_port_tag(int is_port_tag_bit) {
-		tag  |= (is_port_tag_bit&1)             << is_port_tag_offset;
-		mask |= make_mask(num_is_port_tag_bits) << is_port_tag_offset;
-	}
-	void set_slice(int slice_id) {
-		tag  |= (slice_id&make_mask(num_slice_bits)) << slice_offset;
-		mask |= make_mask(num_slice_bits)            << slice_offset;
-	}
-	void set_switch(int switch_id) {
-		tag  |= (switch_id&make_mask(num_switch_bits)) << switch_offset;
-		mask |= make_mask(num_switch_bits)             << switch_offset;
-	}
+	void set_is_port_tag(int is_port_tag_bit);
+	void set_slice(int slice_id);
+	void set_switch(int switch_id);
 
-	int get_is_port_tag() const {
-		return (tag>>is_port_tag_offset)&1;
-	}
-	int get_slice() const {
-		return (tag>>slice_offset)&make_mask(num_slice_bits);
-	}
-	int get_switch() const {
-		return (tag>>switch_offset)&make_mask(num_switch_bits);
-	}
+	int get_is_port_tag() const;
+	int get_slice() const;
+	int get_switch() const;
 
 	/// Add the data set in this object to the match field
-	void add_to_match(fluid_msg::of13::FlowMod& flowmod) const {
-		uint32_t vid_tag  = tag        & make_mask(12);
-		uint32_t vid_mask = mask       & make_mask(12);
-		uint32_t pcp_tag  = (tag>>12)  & make_mask( 3);
-		uint32_t pcp_mask = (mask>>12) & make_mask( 3);
-
-		// Always add the vid tag so OFPVID_PRESENT bit is
-		// always set which is mandatory for PCP tag matching
-		flowmod.add_oxm_field(
-			new fluid_msg::of13::VLANVid(
-				vid_tag  | fluid_msg::of13::OFPVID_PRESENT,
-				vid_mask | fluid_msg::of13::OFPVID_PRESENT));
-
-		if( pcp_mask != 0 ) {
-			// TODO The PCP bits aren't maskable, throw an error
-			// if the pcp_mask isn't make_mask(3)
-			flowmod.add_oxm_field(
-				new fluid_msg::of13::VLANPcp(
-					pcp_tag));
-		}
-	}
+	void add_to_match(fluid_msg::of13::FlowMod& flowmod) const;
 
 	/// Add the data contained in this VLANTag to an action set
 	/**
 	 * This function works both for WriteActions and ApplyActions.
 	 */
 	template<class ActionSet>
-	void add_to_actions(ActionSet& action_set) const {
-		uint32_t vid_tag = tag       & make_mask(12);
-		uint32_t pcp_tag = (tag>>12) & make_mask( 3);
-
-		action_set.add_action(
-			new fluid_msg::of13::SetFieldAction(
-				new fluid_msg::of13::VLANVid(
-					vid_tag | fluid_msg::of13::OFPVID_PRESENT)));
-		action_set.add_action(
-			new fluid_msg::of13::SetFieldAction(
-				new fluid_msg::of13::VLANPcp(pcp_tag)));
-	}
+	void add_to_actions(ActionSet& action_set) const;
 };
 
 class MetadataTag {
 	uint64_t tag, mask;
 public:
-	MetadataTag() :
-		tag(0),
-		mask(0) {
-	}
+	MetadataTag();
 
 	/// Set the group in this tag
-	void set_group(int group_id) {
-		tag  |= (group_id&1);
-		mask |= 1;
-	}
+	void set_group(int group_id);
 	/// Set the slice data in this tag
-	void set_slice(int slice_id) {
-		tag  |= (slice_id&make_mask(num_slice_bits)) << 1;
-		mask |= make_mask(num_slice_bits)            << 1;
-	}
+	void set_slice(int slice_id);
 
 	/// Get the group bit in this tag
-	bool get_group() const {
-		return tag&1;
-	}
+	bool get_group() const;
 	/// Get the slice in this tag
-	int get_slice() const {
-		return (tag>>1) & make_mask(num_slice_bits);
-	}
+	int get_slice() const;
 
 	/// Add a match to this metadata to a flowmod message
 	/**
@@ -168,24 +96,7 @@ public:
 	 * failed.
 	 * \return If adding the match was successful
 	 */
-	bool add_to_match(fluid_msg::of13::FlowMod& flowmod) const {
-		fluid_msg::of13::OXMTLV* oxm = flowmod.get_oxm_field(
-				fluid_msg::of13::OFPXMT_OFB_METADATA);
-		// If there is an existing match on metadata
-		if( oxm != nullptr ) {
-			fluid_msg::of13::Metadata* existing_metadata =
-				(fluid_msg::of13::Metadata*) oxm;
-
-			// If the existing value is not masked can new
-			// data never be added
-			if( !existing_metadata->has_mask() ) {
-				return false;
-			}
-
-			// TODO Continue
-		}
-		return true;
-	}
+	bool add_to_match(fluid_msg::of13::FlowMod& flowmod) const;
 
 	/// Add a metadata tag instruction to this flowmod
 	/**
@@ -193,11 +104,5 @@ public:
 	 * regardless if a write-metadata instruction already
 	 * exists.
 	 */
-	bool add_to_instruction(fluid_msg::of13::FlowMod& flowmod) const {
-		flowmod.add_instruction(
-			new fluid_msg::of13::WriteMetadata(
-				tag,
-				mask));
-		return true;
-	}
+	bool add_to_instruction(fluid_msg::of13::FlowMod& flowmod) const;
 };
