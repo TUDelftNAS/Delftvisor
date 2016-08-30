@@ -102,6 +102,23 @@ void PhysicalSwitch::start() {
 		send_message( port_description_message );
 	}
 
+	// Delete all the flow rules already in the switch
+	{
+		fluid_msg::of13::FlowMod flowmod;
+		flowmod.command( fluid_msg::of13::OFPFC_DELETE );
+		flowmod.table_id( fluid_msg::of13::OFPTT_ALL );
+		flowmod.cookie_mask(0);
+		flowmod.buffer_id(OFP_NO_BUFFER);
+		send_message( flowmod );
+	}
+
+	// Send a barrier request to make sure the delete command
+	// is executed before any new rules are added
+	{
+		fluid_msg::of13::BarrierRequest barrier;
+		send_message(barrier);
+	}
+
 	// Create the rest of the initial rules
 	create_static_rules();
 	// Create the dynamic rules
