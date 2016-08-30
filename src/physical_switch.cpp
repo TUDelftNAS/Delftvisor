@@ -417,12 +417,15 @@ void PhysicalSwitch::update_dynamic_rules() {
 			// Determine the actions for flowmod_1
 			fluid_msg::of13::WriteActions write_actions;
 			if( current_state == link ) {
+				vlan_tag.set_switch(VLANTag::max_port_id);
+				vlan_tag.add_to_actions(write_actions);
+			}
+			else if( current_state == host ) {
 				write_actions.add_action(
 					new fluid_msg::of13::PopVLANAction());
 			}
 			else {
-				vlan_tag.set_switch(VLANTag::max_port_id);
-				vlan_tag.add_to_actions(write_actions);
+				continue;
 			}
 			write_actions.add_action(
 				new fluid_msg::of13::OutputAction(
@@ -433,6 +436,8 @@ void PhysicalSwitch::update_dynamic_rules() {
 			// Send flowmod_1
 			send_message(flowmod_1_copy);
 		}
+
+		// TODO Update FLOOD port group
 	}
 
 	// Figure out what to do with traffic meant for a different switch
