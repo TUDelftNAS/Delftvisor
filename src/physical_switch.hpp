@@ -126,6 +126,8 @@ private:
 	std::unordered_map<int,int> dist;
 	/// To what port to forward traffic to get to a switch (switch_id -> port_number)
 	std::unordered_map<int,uint32_t> next;
+	/// The currently set port to forward traffic to for each switch (switch id -> port number)
+	std::unordered_map<int,uint32_t> current_next;
 
 	/// Setup the flow table with the static initial rules
 	void create_static_rules();
