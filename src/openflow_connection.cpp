@@ -9,14 +9,16 @@ OpenflowConnection::OpenflowConnection( boost::asio::ip::tcp::socket& socket ) :
 	// Construct the socket of this connection from an existing socket
 	socket(std::move(socket)),
 	echo_timer(socket.get_io_service(),boost::posix_time::milliseconds(0)),
-	echo_received(true) {
+	echo_received(true),
+	next_xid(0) {
 }
 
 OpenflowConnection::OpenflowConnection( boost::asio::io_service& io ) :
 	// Construct a new socket
 	socket(io),
 	echo_timer(io,boost::posix_time::milliseconds(0)),
-	echo_received(true) {
+	echo_received(true),
+	next_xid(0) {
 }
 
 void OpenflowConnection::handle_network_error(
@@ -35,6 +37,7 @@ void OpenflowConnection::handle_network_error(
 			" connection was " << error.message();
 		break;
 	default:
+		stop();
 		BOOST_LOG_TRIVIAL(error) << *this <<
 			" has network problem: " << error.message();
 	}
