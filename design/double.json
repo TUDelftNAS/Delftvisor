@@ -1,0 +1,68 @@
+{
+	"switch_endpoint_port" : 6633,
+	"slices" : [
+		{
+			"controller" : {
+				"ip"   : "127.0.0.1",
+				"port" : 6653
+			},
+			"max_rate"         : 500,
+			"virtual_switches" : [
+				{
+					"datapath_id" : 100,
+					"ports" : [
+						{
+							"virtual_port"         : 10,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 11,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 3
+						}
+					]
+				},
+				{
+					"datapath_id" : 101,
+					"ports" : [
+						{
+							"virtual_port"         : 20,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 21,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 3
+						}
+					]
+				}
+			]
+		},
+		{
+			"controller" : {
+				"ip"   : "127.0.0.1",
+				"port" : 6653
+			},
+			"max_rate"         : 500,
+			"virtual_switches" : [
+				{
+					"datapath_id" : 200,
+					"ports" : [
+						{
+							"virtual_port"         : 30,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 2
+						},
+						{
+							"virtual_port"         : 31,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 2
+						}
+					]
+				}
+			]
+		}
+	]
+}
