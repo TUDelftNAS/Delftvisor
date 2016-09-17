@@ -1,6 +1,5 @@
 #include "slice.hpp"
 
-#include <iostream>
 #include <string>
 
 #include <boost/asio.hpp>

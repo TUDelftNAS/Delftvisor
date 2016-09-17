@@ -63,7 +63,7 @@ private:
 	/// Send a message that needs a response
 	/**
 	 * This version stores the original xid this message was
-	 * send with so the response can be forwarded to the appropiate
+	 * send with so the response can be forwarded to the appropriate
 	 * virtual switch.
 	 */
 	void send_request_message(
@@ -72,6 +72,15 @@ private:
 
 	/// Represents a port on this switch as it is in the network below
 	struct Port {
+		/// The internal id for this port
+		//int id;
+		/// Save per port what rule in the first flow table is pushed
+		enum State {
+			link_rule,
+			host_rule,
+			drop_rule,
+			no_rule
+		} state;
 		/// If this port has a link to another switch
 		boost::shared_ptr<DiscoveredLink> link;
 		/// The data concerning this port
@@ -81,22 +90,16 @@ private:
 	std::unordered_map<
 		uint32_t,
 		Port> ports;
+
 	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
 	/**
-	 * This structure is separate since not necessarily already
-	 * found on this switch.
+	 * This structure is separate from ports since not all
+	 * ports that are needed have to already have been registered.
 	 */
 	std::unordered_map<
 		uint32_t,
 		std::set<boost::shared_ptr<VirtualSwitch>>> needed_ports;
 
-	/// Save per port what rule in the first flow table is pushed
-	enum PortState {
-		link,
-		host,
-		down
-	};
-	std::unordered_map<uint32_t,PortState> ports_state;
 
 	/// Handle information about a port we received
 	/**

@@ -16,10 +16,15 @@ VirtualSwitch::VirtualSwitch(
 	:
 		OpenflowConnection::OpenflowConnection(io),
 		connection_backoff_timer(io),
+		id(virtual_switch_id_allocator.new_id()),
 		datapath_id(datapath_id),
 		hypervisor(hypervisor),
 		slice(slice),
 		state(down) {
+}
+
+int VirtualSwitch::get_id() const {
+	return id;
 }
 
 const Slice* VirtualSwitch::get_slice() const {
@@ -136,21 +141,25 @@ void VirtualSwitch::stop() {
 	connection_backoff_timer.cancel();
 
 	// If we the connection was stopped by the controller
-	// immediatly try again
+	// immediately try again
 	if( state==connected ) {
 		BOOST_LOG_TRIVIAL(info) << *this <<
 			" connection dropped, trying again";
 		try_connect();
 
-		// Register this virtual switch with the physical switches
+		// Remove registration of this virtual switch with the physical switches
 		for( const auto& dep_sw : dependent_switches ) {
 			auto sw_ptr =
 				hypervisor->
 					get_physical_switch_by_datapath_id(dep_sw.first);
 			for( const auto& port : dep_sw.second ) {
+				// Remove the registration
 				sw_ptr->remove_port_interest(
 							port.second,
 							shared_from_this());
+
+				// Update the port rule
+				sw_ptr->update_dynamic_rules();
 			}
 		}
 	}

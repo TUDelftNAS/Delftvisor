@@ -9,6 +9,7 @@
 
 #include "physical_switch.hpp"
 #include "id_allocator.hpp"
+#include "tag.hpp"
 
 class Slice;
 

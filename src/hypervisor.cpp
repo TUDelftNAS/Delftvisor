@@ -93,6 +93,7 @@ PhysicalSwitch::pointer Hypervisor::get_physical_switch(int switch_id) const {
 		return it->second;
 	}
 }
+
 PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(
 		uint64_t datapath_id) const {
 	auto it = datapath_id_to_switch_id.find(datapath_id);
@@ -103,11 +104,11 @@ PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(
 		return get_physical_switch(it->second);
 	}
 }
-/// Get the physical switches in the hypervisor
+
 const std::unordered_map<int,PhysicalSwitch::pointer>& Hypervisor::get_physical_switches() const {
 	return physical_switches;
 }
-/// Get slices
+
 const std::list<Slice>& Hypervisor::get_slices() const {
 	return slices;
 }

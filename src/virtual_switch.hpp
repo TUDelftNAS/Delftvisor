@@ -13,6 +13,9 @@ class Slice;
 
 class VirtualSwitch : public OpenflowConnection {
 private:
+	/// The global id for this virtual switch
+	int id;
+
 	/// The datpath id of this switch
 	uint64_t datapath_id;
 
@@ -70,6 +73,7 @@ public:
 		Hypervisor* hypervisor,
 		Slice* slice);
 
+	int get_id() const;
 	const Slice* get_slice() const;
 
 	/// Add a port to this virtual switch
