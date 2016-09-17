@@ -319,6 +319,7 @@ void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::Multipar
 	// Create the message
 	fluid_msg::of13::MultipartReplyPortDescription port_description;
 	port_description.xid(multipart_request_message.xid());
+	port_description.flags(0);
 
 	// Add all the port descriptions
 	for( const auto& port_pair : port_to_dependent_switch ) {
