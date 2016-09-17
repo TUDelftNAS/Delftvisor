@@ -6,6 +6,7 @@
 #include <boost/asio.hpp>
 
 #include "openflow_connection.hpp"
+#include "id_allocator.hpp"
 
 class DiscoveredLink;
 class VirtualSwitch;

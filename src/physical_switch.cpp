@@ -19,10 +19,6 @@ PhysicalSwitch::PhysicalSwitch(
 		id(id),
 		hypervisor(hypervisor),
 		state(unregistered) {
-	if( id >= 4096 ) {
-		BOOST_LOG_TRIVIAL(fatal) << "Ran out of switch id's";
-		// Crash or something?
-	}
 	// Set this one here already because the value is printed
 	features.datapath_id = 0;
 }
@@ -559,6 +555,8 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 void PhysicalSwitch::reset_distances() {
 	dist.clear();
 	next.clear();
+
+	set_distance(id,0);
 
 	// Loop over the links and fill the dist and next maps
 	for( const auto& port : ports ) {

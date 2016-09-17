@@ -5,7 +5,8 @@
 #include "hypervisor.hpp"
 #include "virtual_switch.hpp"
 #include "physical_switch.hpp"
-#include "slice.hpp"
+
+IdAllocator<0,MetadataTag::max_virtual_switch_id> virtual_switch_id_allocator;
 
 VirtualSwitch::VirtualSwitch(
 		boost::asio::io_service& io,

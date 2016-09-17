@@ -22,7 +22,7 @@ private:
 	std::list<Slice> slices;
 
 	/// The allocator for physical switch id's
-	IdAllocator physical_switch_id_allocator;
+	IdAllocator<0,VLANTag::max_switch_id> physical_switch_id_allocator;
 	/// The physical switches registered at this hypervisor
 	std::unordered_map<int,PhysicalSwitch::pointer> physical_switches;
 	/// A map from datapath id to switch id

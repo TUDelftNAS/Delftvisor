@@ -14,8 +14,7 @@
 
 Hypervisor::Hypervisor( boost::asio::io_service& io ) :
 	signals(io, SIGINT, SIGTERM),
-	switch_acceptor(io),
-	physical_switch_id_allocator(0,VLANTag::max_switch_id) {
+	switch_acceptor(io) {
 }
 
 void Hypervisor::handle_signals(
