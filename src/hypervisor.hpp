@@ -73,6 +73,8 @@ public:
 	void calculate_routes();
 	/// Print the found topology to an ostream
 	void print_topology(std::ostream& os);
+	/// Print the found distance vector to an ostream
+	void print_switch_distances(std::ostream& os);
 
 	/// Load configuration from file
 	void load_configuration( std::string filename );

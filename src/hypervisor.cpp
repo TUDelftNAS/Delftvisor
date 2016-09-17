@@ -172,7 +172,7 @@ void Hypervisor::calculate_routes() {
 				int dist_k_j = k.second->get_distance(j.first);
 				int dist_i_j = i.second->get_distance(j.first);
 				if( dist_i_k + dist_k_j < dist_i_j ) {
-					i.second->set_distance( j.first, dist_i_k + dist_i_j );
+					i.second->set_distance( j.first, dist_i_k + dist_k_j );
 					i.second->set_next( j.first, i.second->get_next(k.first) );
 				}
 			}
@@ -189,6 +189,8 @@ void Hypervisor::calculate_routes() {
 	// TODO Remove this debugging info
 	std::ofstream topo_file("topo.dot");
 	print_topology(topo_file);
+	std::ofstream distance_file("distances.dat");
+	print_switch_distances(distance_file);
 }
 
 void Hypervisor::print_topology(std::ostream& os) {
@@ -206,6 +208,22 @@ void Hypervisor::print_topology(std::ostream& os) {
 			}
 		}
 		os << "}\n";
+	}
+	os << "}\n" << std::flush;
+}
+
+void Hypervisor::print_switch_distances(std::ostream& os) {
+	os << "Distances:\n{\n";
+	for( const auto &ps1 : physical_switches ) {
+		int id1 = ps1.second->get_id();
+		os << "\t" << id1 << " : [\n";
+		for( const auto &ps2 : physical_switches ) {
+			int id2 = ps2.second->get_id();
+			os << "\t\t{ id: " << id2 << ", dist: "
+				<< ps1.second->get_distance(id2) << ", next: "
+				<< ps1.second->get_next(id2) << " },\n";
+		}
+		os << "\t],\n";
 	}
 	os << "}\n" << std::flush;
 }
