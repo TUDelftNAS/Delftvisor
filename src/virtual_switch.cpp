@@ -304,22 +304,55 @@ void VirtualSwitch::handle_packet_out(fluid_msg::of13::PacketOut& packet_out_mes
 
 void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received flow_mod";
-	// TODO
+
+	// Increase the table id with 2
+	flow_mod_message.table_id(flow_mod_message.table_id()+2);
+
+	for( auto& ps_pair : dependent_switches ) {
+		// Fetch a shared pointer to the dependent switch
+		auto ps_ptr = hypervisor->get_physical_switch_by_datapath_id(ps_pair.first);
+
+		// We need to push 2 rules to the physical switch
+		fluid_msg::of13::FlowMod flowmod_copy_1(flow_mod_message);
+		fluid_msg::of13::FlowMod flowmod_copy_2(flow_mod_message);
+
+		// Add the match to both flowmods
+		MetadataTag metadata_tag;
+		metadata_tag.set_group(true);
+		metadata_tag.set_virtual_switch(id);
+		if( !metadata_tag.add_to_match(flowmod_copy_1) ) {
+			// TODO Handle case where metadata already present
+			BOOST_LOG_TRIVIAL(warning) << *this
+				<< " received flowmod with problematic metadata match field";
+			return;
+		}
+		metadata_tag.set_group(false);
+		metadata_tag.add_to_match(flowmod_copy_2);
+
+		// Send the message to the virtual switch
+		// TODO Use send_response function so xid is saved
+		ps_ptr->send_message(flowmod_copy_1);
+		ps_ptr->send_message(flowmod_copy_2);
+	}
 }
+
 void VirtualSwitch::handle_group_mod(fluid_msg::of13::GroupMod& group_mod_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received group_mod";
 	// TODO
 }
+
+void VirtualSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_message) {
+	BOOST_LOG_TRIVIAL(info) << *this << " received meter_mod";
+	// TODO
+}
+
 void VirtualSwitch::handle_port_mod(fluid_msg::of13::PortMod& port_mod_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received port_mod";
 	// TODO
 }
+
 void VirtualSwitch::handle_table_mod(fluid_msg::of13::TableMod& table_mod_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received table_mod";
-	// TODO
-}
-void VirtualSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_message) {
-	BOOST_LOG_TRIVIAL(info) << *this << " received meter_mod";
 	// TODO
 }
 

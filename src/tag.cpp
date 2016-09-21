@@ -157,25 +157,72 @@ int MetadataTag::get_virtual_switch() const {
 }
 
 bool MetadataTag::add_to_match(fluid_msg::of13::FlowMod& flowmod) const {
-	fluid_msg::of13::OXMTLV* oxm = flowmod.get_oxm_field(
-			fluid_msg::of13::OFPXMT_OFB_METADATA);
-	// If there is an existing match on metadata
-	if( oxm != nullptr ) {
-		fluid_msg::of13::Metadata* existing_metadata =
-			(fluid_msg::of13::Metadata*) oxm;
+	// The variables to save the existing match values in
+	uint64_t existing_tag  = 0;
+	uint64_t existing_mask = 0;
 
-		// If the existing value is not masked can new
-		// data never be added
-		if( !existing_metadata->has_mask() ) {
-			return false;
+	// Retreive the match structure from the flowmod
+	fluid_msg::of13::Match old_match = flowmod.match();
+
+	// Create a new match structure
+	fluid_msg::of13::Match new_match;
+
+	// Loop over all OXM fields and figure out if they are
+	// set in the old match field, if they are copy them to
+	// the new match unless it is a match on metadata. If it
+	// is a match on metadata save the old values.
+	for( size_t i=0; i<OXM_NUM; ++i ) {
+		fluid_msg::of13::OXMTLV* oxm = flowmod.get_oxm_field(i);
+		if( oxm != nullptr ) {
+			if( i == fluid_msg::of13::OFPXMT_OFB_METADATA ) {
+				fluid_msg::of13::Metadata* existing_metadata =
+					(fluid_msg::of13::Metadata*) oxm;
+
+				// If the existing value is not masked can new
+				// data never be added
+				if( !existing_metadata->has_mask() ) {
+					return false;
+				}
+
+				// Save the data in the existing metadata mask
+				existing_tag  = existing_metadata->value();
+				existing_mask = existing_metadata->mask();
+			}
+			else {
+				// Copy the old field if possible
+				new_match.add_oxm_field(oxm->clone());
+			}
 		}
-
-		// TODO Continue
 	}
+
+	// The total amount of bits used by the hypervisor
+	constexpr int total_bits = num_virtual_switch_bits + 1;
+
+	// Check if bits in the mask are set that would be shifted out
+	uint64_t mask_check
+		= make_mask(total_bits) << (64-total_bits);
+	if( existing_mask & mask_check ) {
+		return false;
+	}
+
+	// Create the actual mask
+	uint64_t new_tag  = tag  | (existing_tag <<(total_bits));
+	uint64_t new_mask = mask | (existing_mask<<(total_bits));
+
+	// Add the metadata match
+	new_match.add_oxm_field(
+			new fluid_msg::of13::Metadata(
+				new_tag,
+				new_mask));
+
+	// Overwrite the match structure in the flowmod
+	flowmod.match(new_match);
+
+	// Return that everything went ok
 	return true;
 }
 
-bool MetadataTag::add_to_instruction(fluid_msg::of13::FlowMod& flowmod) const {
+bool MetadataTag::add_to_instructions(fluid_msg::of13::FlowMod& flowmod) const {
 	// Look if there already is a write_metadata instruction
 	// in the flowmod message
 	fluid_msg::of13::InstructionSet instruction_set = flowmod.instructions();

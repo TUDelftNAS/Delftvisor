@@ -151,5 +151,5 @@ public:
 	 * regardless if a write-metadata instruction already
 	 * exists.
 	 */
-	bool add_to_instruction(fluid_msg::of13::FlowMod& flowmod) const;
+	bool add_to_instructions(fluid_msg::of13::FlowMod& flowmod) const;
 };
