@@ -1,6 +1,7 @@
 #pragma once
 
 #include <set>
+#include <unordered_set>
 #include <unordered_map>
 
 #include <boost/asio.hpp>
@@ -193,6 +194,25 @@ public:
 
 	/// Update the dynamic rules after the topology has changed
 	void update_dynamic_rules();
+
+	/// Rewrite an InstructionSet for this physical switch
+	bool rewrite_instruction_set(
+		fluid_msg::of13::InstructionSet& old_instruction_set,
+		fluid_msg::of13::InstructionSet& instruction_set_with_output,
+		fluid_msg::of13::InstructionSet& instruction_set_without_output,
+		VirtualSwitch* virtual_switch);
+	/// Rewrite an action set for this physical switch
+	bool rewrite_action_set(
+		fluid_msg::ActionSet& old_action_set,
+		fluid_msg::ActionSet& action_set_with_output,
+		fluid_msg::ActionSet& action_set_without_output,
+		bool& has_action_with_group,
+		VirtualSwitch* virtual_switch);
+	/// Rewrite an action list for this physical switch
+	bool rewrite_action_list(
+		fluid_msg::ActionList& old_action_list,
+		fluid_msg::ActionList& new_action_list,
+		VirtualSwitch* virtual_switch);
 
 	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);

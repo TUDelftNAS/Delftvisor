@@ -116,9 +116,9 @@ public:
 };
 
 class MetadataTag : public Tag<uint64_t> {
+public:
 	/// The amount of bits used to describe
 	static constexpr int num_virtual_switch_bits = 13;
-public:
 	static constexpr uint16_t max_virtual_switch_id = make_mask(num_virtual_switch_bits);
 
 	MetadataTag();

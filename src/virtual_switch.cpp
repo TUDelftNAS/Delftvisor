@@ -329,6 +329,23 @@ void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) 
 		metadata_tag.set_group(false);
 		metadata_tag.add_to_match(flowmod_copy_2);
 
+		// Rewrite the instructions
+		fluid_msg::of13::InstructionSet instruction_set_with_output, instruction_set_without_output;
+		fluid_msg::of13::InstructionSet old_instruction_set = flow_mod_message.instructions();
+		if( !ps_ptr->rewrite_instruction_set(
+				old_instruction_set,
+				instruction_set_with_output,
+				instruction_set_without_output,
+				this) ) {
+			BOOST_LOG_TRIVIAL(warning) << *this
+				<< " received flowmod with problematic instruction set";
+			return;
+		}
+
+		// Add the rewritten instructions to the flowmods
+		flowmod_copy_1.instructions(instruction_set_with_output);
+		flowmod_copy_2.instructions(instruction_set_without_output);
+
 		// Send the message to the virtual switch
 		// TODO Use send_response function so xid is saved
 		ps_ptr->send_message(flowmod_copy_1);
