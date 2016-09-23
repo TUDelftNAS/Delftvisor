@@ -10,6 +10,8 @@ add_executable(hypervisor
 	physical_switch.cpp
 	physical_switch_unused.cpp
 	physical_switch_topology.cpp
+	physical_switch_flowtable.cpp
+	physical_switch_rewrite.cpp
 	openflow_connection.cpp
 	discoveredlink.cpp
 	tag.cpp)
