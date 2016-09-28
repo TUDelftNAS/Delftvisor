@@ -40,7 +40,7 @@ void VirtualSwitch::add_port(
 		[port_number] = physical_datapath_id;
 	dependent_switches
 		[physical_datapath_id]
-		[port_number] = physical_port_number;
+		.port_map.insert(port_number, physical_port_number);
 }
 
 void VirtualSwitch::remove_port(uint32_t port_number) {
@@ -49,24 +49,15 @@ void VirtualSwitch::remove_port(uint32_t port_number) {
 	port_to_dependent_switch.erase(port_number);
 
 	// Remove from dependent_switches
-	dependent_switches.at(physical_dpid).erase(port_number);
-	if( dependent_switches.at(physical_dpid).size() == 0 ) {
+	dependent_switches.at(physical_dpid).port_map.erase(port_number);
+	if( dependent_switches.at(physical_dpid).port_map.size() == 0 ) {
 		dependent_switches.erase(physical_dpid);
 	}
 }
 
-uint32_t VirtualSwitch::get_virtual_port_no(
-		uint64_t physical_datapath_id,
-		uint32_t physical_port_number) {
-	// TODO This is pretty stupid
-	for( const auto& phy_port : dependent_switches.at(physical_datapath_id) ) {
-		if( phy_port.second == physical_port_number ) {
-			return phy_port.first;
-		}
-	}
-	BOOST_LOG_TRIVIAL(error) << *this << " asked to translate dpid=" <<
-		physical_datapath_id << ", port_id=" << physical_port_number;
-	return UINT32_MAX;
+const bidirectional_map<uint32_t,uint32_t>& VirtualSwitch::get_port_map(
+		uint64_t physical_datapath_id) const {
+	return dependent_switches.at(physical_datapath_id).port_map;
 }
 
 void VirtualSwitch::try_connect() {
@@ -119,7 +110,7 @@ void VirtualSwitch::start() {
 			auto sw_ptr =
 				hypervisor->
 					get_physical_switch_by_datapath_id(dep_sw.first);
-			for( const auto& port : dep_sw.second ) {
+			for( const auto& port : dep_sw.second.port_map.get_virtual_to_physical() ) {
 				sw_ptr->register_port_interest(
 							port.second,
 							shared_from_this());
@@ -152,7 +143,7 @@ void VirtualSwitch::stop() {
 			auto sw_ptr =
 				hypervisor->
 					get_physical_switch_by_datapath_id(dep_sw.first);
-			for( const auto& port : dep_sw.second ) {
+			for( const auto& port : dep_sw.second.port_map.get_virtual_to_physical() ) {
 				// Remove the registration
 				sw_ptr->remove_port_interest(
 							port.second,
@@ -195,19 +186,6 @@ void VirtualSwitch::check_online() {
 			all_online_and_reachable = false;
 			break;
 		}
-
-		// Check that the physical switch actually contains all
-		// the ports that were asked of it
-		/*
-		const auto& phy_ports = switch_ptr->get_ports();
-		for( const auto& port : dep_sw.second ) {
-			if( phy_ports.find(port.first) == phy_ports.end() ) {
-				all_online_and_reachable = false;
-				break;
-			}
-		}
-		if( !all_online_and_reachable ) break;
-		*/
 
 		if( first_switch == nullptr ) {
 			// Set the current PhysicalSwitch in the first_switch
@@ -387,7 +365,7 @@ void VirtualSwitch::handle_multipart_request_port_desc(fluid_msg::of13::Multipar
 		uint32_t physical_port_no =
 			dependent_switches
 				.at(port_pair.second)
-					.at(port_no);
+					.port_map.get_physical(port_no);
 
 		// Get the physical ports from the physical switch
 		auto& phy_ports =

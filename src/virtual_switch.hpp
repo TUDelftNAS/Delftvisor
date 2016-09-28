@@ -5,6 +5,8 @@
 
 #include <boost/asio.hpp>
 
+#include "bidirectional_map.hpp"
+
 #include "openflow_connection.hpp"
 
 class PhysicalSwitch;
@@ -32,15 +34,17 @@ private:
 		connected
 	} state;
 
+	struct DependentSwitch {
+		/// The mapping virtual port id <-> physical port id
+		bidirectional_map<uint32_t,uint32_t> port_map;
+	};
 	/// The map with all the port id's
 	/**
 	 * physical_dpid -> (virtual_port_no -> physical_port_no)
 	 */
 	std::unordered_map<
 		uint64_t,
-		std::unordered_map<
-			uint32_t,
-			uint32_t>> dependent_switches;
+		DependentSwitch> dependent_switches;
 	/// The physical dpid that contains a virtual port
 	/**
 	 * virtual_port_no -> physical_dpid
@@ -73,7 +77,9 @@ public:
 		Hypervisor* hypervisor,
 		Slice* slice);
 
+	/// Get the unique id of this virtual switch
 	int get_id() const;
+	/// Get the slice this virtual switch is in
 	const Slice* get_slice() const;
 
 	/// Add a port to this virtual switch
@@ -83,10 +89,9 @@ public:
 		uint32_t physical_port_number);
 	/// Remove a port from this virtual switch
 	void remove_port(uint32_t port_number);
-	/// Get a virtual port number
-	uint32_t get_virtual_port_no(
-		uint64_t physical_datapath_id,
-		uint32_t physical_port_number);
+	/// Get the virtual -> physical port map for a dependent switch
+	const bidirectional_map<uint32_t,uint32_t>& get_port_map(
+		uint64_t physical_datapath_id) const;
 
 	/// Check if this switch should be started/stopped
 	/**

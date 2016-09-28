@@ -6,8 +6,10 @@
 
 #include <boost/asio.hpp>
 
-#include "openflow_connection.hpp"
 #include "id_allocator.hpp"
+#include "bidirectional_map.hpp"
+
+#include "openflow_connection.hpp"
 
 class DiscoveredLink;
 class VirtualSwitch;
@@ -101,7 +103,6 @@ private:
 		uint32_t,
 		std::set<boost::shared_ptr<VirtualSwitch>>> needed_ports;
 
-
 	/// Handle information about a port we received
 	/**
 	 * Two messages contain port information, the PortStatus
@@ -112,9 +113,54 @@ private:
 	 */
 	void handle_port( fluid_msg::of13::Port& port, uint8_t reason );
 
+	/// Allocate valid group id's
+	IdAllocator<1,UINT32_MAX> group_id_allocator;
+	/// A group created to be used as output port in a virtual switch
+	struct OutputGroup {
+		/// The group id of this OutputGroup
+		uint32_t group_id;
+		/// The state of the action in this group
+		enum State {
+			no_rule,
+			host_rule,
+			shared_link_rule,
+			switch_one_hop_rule,
+			switch_rule
+		} state;
+		/// The physical port this rule currently outputs over
+		uint32_t output_port;
+	};
+	/// An entry with the rewrite information for 1 virtual switch
+	struct RewriteEntry {
+		/// The group id for the flood action
+		// TODO Where should this be set?
+		uint32_t flood_group_id;
+		/// A bidirectional mapping between virtual group id <-> physical group id
+		bidirectional_map<uint32_t,uint32_t> group_id_map;
+		/// A map from (virtual port id) -> OutputGroup
+		std::unordered_map<uint32_t,OutputGroup> output_groups;
+	};
+	/// A mapping from virtual switch id -> RewriteEntry
+	/**
+	 * This structure contains all information needed to
+	 * rewrite id's between the physical and the virtual
+	 * except for the port id's. For each virtual switch
+	 * it also contains the information about the groups
+	 * created.
+	 */
+	std::unordered_map<int, RewriteEntry> rewrite_map;
+	/// Retreive the group id used to output
+	/**
+	 * This function returns the group id to rewrite
+	 * an output action to. If the group isn't yet
+	 * created in the switch is the group created.
+	 */
+	uint32_t virtual_port_to_group_id(
+			const VirtualSwitch* virtual_switch,
+			uint32_t port_id);
+
 	/// The timer that when fired sends a topology discovery packet
 	boost::asio::deadline_timer topology_discovery_timer;
-
 	/// Create the flowrule in this switch to forward topology discovery messages
 	void make_topology_discovery_rule();
 	/// The next port to send a topology discovery message over

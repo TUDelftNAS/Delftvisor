@@ -198,7 +198,8 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 			// Rewrite the port number
 			port.port_no(
 				switch_pointer->
-					get_virtual_port_no(features.datapath_id,port.port_no()));
+					get_port_map(features.datapath_id)
+						.get_virtual(port.port_no()));
 			// Set the port data with the rewritten port number into the port status message
 			port_status_message.desc( port );
 

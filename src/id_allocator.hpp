@@ -8,7 +8,7 @@
  * id's. This class keeps track of what id's are
  * used and what are still available.
  */
-template<int min, int max>
+template<unsigned long long min,unsigned long long max>
 class IdAllocator {
 	/// The next id to be released
 	int next;
