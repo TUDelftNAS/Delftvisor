@@ -78,6 +78,28 @@ void PhysicalSwitch::create_static_rules() {
 		send_message(meter_mod);
 	}
 
+	// Create the group that sends the packet back to the controller
+	{
+		fluid_msg::of13::GroupMod group_mod;
+		group_mod.command(fluid_msg::of13::OFPGC_ADD);
+		group_mod.group_type(fluid_msg::of13::OFPGT_INDIRECT);
+		group_mod.group_id(0);
+
+		// Create the bucket that forward
+		fluid_msg::of13::Bucket bucket;
+		bucket.weight(0);
+		bucket.watch_port(fluid_msg::of13::OFPP_ANY);
+		bucket.watch_group(fluid_msg::of13::OFPG_ANY);
+		bucket.add_action(
+			new fluid_msg::of13::OutputAction(
+				fluid_msg::of13::OFPP_CONTROLLER,
+				fluid_msg::of13::OFPCML_NO_BUFFER));
+		group_mod.add_bucket(bucket);
+
+		// Send the message
+		send_message(group_mod);
+	}
+
 	// TODO Send a barrierrequest
 }
 

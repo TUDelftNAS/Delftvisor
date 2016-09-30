@@ -114,6 +114,9 @@ private:
 	void handle_port( fluid_msg::of13::Port& port, uint8_t reason );
 
 	/// Allocate valid group id's
+	/**
+	 * The group with id 0 is reserved to output to the controller.
+	 */
 	IdAllocator<1,UINT32_MAX> group_id_allocator;
 	/// A group created to be used as output port in a virtual switch
 	struct OutputGroup {
