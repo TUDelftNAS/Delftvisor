@@ -244,6 +244,53 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// TODO Update FLOOD port group
 	}
 
+	// Loop over all virtual switches and forward traffic that arrives
+	// over a shared link to the correct virtual switch
+	for( const auto& needed_port_pair : needed_ports ) {
+		for( const auto& virtual_switch : needed_port_pair.second ) {
+			// The used_slice_ids contains all the slice for which this switch
+			// already knows to what virtual switch to forward. If the slice id
+			// of a virtual switch isn't in this set add the forwarding rule and
+			// add the slice id to the set.
+			if( used_slice_ids.find(virtual_switch->get_slice()->get_id())==used_slice_ids.end() ) {
+				used_slice_ids.insert(virtual_switch->get_slice()->get_id());
+
+				// Create the message
+				fluid_msg::of13::FlowMod flowmod;
+				flowmod.table_id(1);
+				flowmod.priority(30);
+				flowmod.buffer_id(OFP_NO_BUFFER);
+				flowmod.command(fluid_msg::of13::OFPFC_ADD);
+
+				// Create the match
+				PortVLANTag vlan_tag;
+				vlan_tag.set_port(VLANTag::max_port_id);
+				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
+				vlan_tag.add_to_match(flowmod);
+
+				// Add the actions
+				fluid_msg::of13::ApplyActions apply_actions;
+				apply_actions.add_action(
+					new fluid_msg::of13::PopVLANAction());
+				flowmod.add_instruction(apply_actions);
+				// Add the meter instruction
+				// TODO Conditionally try to add meter instruction?
+				//flowmod.add_instruction(
+				//	new fluid_msg::of13::Meter(
+				//		virtual_switch->get_slice()->get_id()+1));
+				MetadataTag metadata_tag;
+				metadata_tag.set_group(false);
+				metadata_tag.set_virtual_switch(virtual_switch->get_id());
+				metadata_tag.add_to_instructions(flowmod);
+				flowmod.add_instruction(
+					new fluid_msg::of13::GoToTable(2));
+
+				// Send the message
+				send_message(flowmod);
+			}
+		}
+	}
+
 	// Figure out what to do with traffic meant for a different switch
 	for( const auto& switch_it : hypervisor->get_physical_switches() ) {
 		int other_id = switch_it.first;

@@ -94,6 +94,14 @@ private:
 		uint32_t,
 		Port> ports;
 
+	/// The slice id's that have a forwarding rule set
+	/**
+	 * If a packet arrives over a shared link the rule with table_id=1 and
+	 * priority=30. This set contains all the slice id's for which a rule
+	 * is already pushed.
+	 */
+	std::set<int> used_slice_ids;
+
 	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
 	/**
 	 * This structure is separate from ports since not all
