@@ -160,15 +160,14 @@ private:
 	 * created.
 	 */
 	std::unordered_map<int, RewriteEntry> rewrite_map;
-	/// Retreive the group id used to output
+	/// A mapping from physical switch id -> group id
 	/**
-	 * This function returns the group id to rewrite
-	 * an output action to. If the group isn't yet
-	 * created in the switch is the group created.
+	 * Every physical switch has a group that forward to it,
+	 * this map contains the group id reserved to forward to
+	 * that switch.
 	 */
-	uint32_t virtual_port_to_group_id(
-			const VirtualSwitch* virtual_switch,
-			uint32_t port_id);
+	std::unordered_map<int, uint32_t> switch_id_to_group_id;
+
 
 	/// The timer that when fired sends a topology discovery packet
 	boost::asio::deadline_timer topology_discovery_timer;
@@ -249,27 +248,31 @@ public:
 	/// Set the port to forward traffic over to get to a switch
 	void set_next(int switch_id, uint32_t port_number);
 
-	/// Update the dynamic rules after the topology has changed
+	/// Update the dynamic rules and groups after the topology has changed
 	void update_dynamic_rules();
 
+	/// Rewrite a group id for a specific virtual switch
+	uint32_t get_rewritten_group_id(
+		uint32_t virtual_group_id,
+		const VirtualSwitch* virtual_switch);
 	/// Rewrite an InstructionSet for this physical switch
 	bool rewrite_instruction_set(
 		fluid_msg::of13::InstructionSet& old_instruction_set,
 		fluid_msg::of13::InstructionSet& instruction_set_with_output,
 		fluid_msg::of13::InstructionSet& instruction_set_without_output,
-		VirtualSwitch* virtual_switch);
+		const VirtualSwitch* virtual_switch);
 	/// Rewrite an action set for this physical switch
 	bool rewrite_action_set(
 		fluid_msg::ActionSet& old_action_set,
 		fluid_msg::ActionSet& action_set_with_output,
 		fluid_msg::ActionSet& action_set_without_output,
 		bool& has_action_with_group,
-		VirtualSwitch* virtual_switch);
+		const VirtualSwitch* virtual_switch);
 	/// Rewrite an action list for this physical switch
 	bool rewrite_action_list(
 		fluid_msg::ActionList& old_action_list,
 		fluid_msg::ActionList& new_action_list,
-		VirtualSwitch* virtual_switch);
+		const VirtualSwitch* virtual_switch);
 
 	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);

@@ -9,7 +9,7 @@ bool PhysicalSwitch::rewrite_instruction_set(
 		fluid_msg::of13::InstructionSet& old_instruction_set,
 		fluid_msg::of13::InstructionSet& instruction_set_with_output,
 		fluid_msg::of13::InstructionSet& instruction_set_without_output,
-		VirtualSwitch* virtual_switch) {
+		const VirtualSwitch* virtual_switch) {
 	uint64_t metadata_tag  = 0;
 	uint64_t metadata_mask = 0;
 
@@ -145,38 +145,85 @@ bool PhysicalSwitch::rewrite_instruction_set(
 	return true;
 }
 
+uint32_t PhysicalSwitch::get_rewritten_group_id(
+		uint32_t virtual_group_id,
+		const VirtualSwitch* virtual_switch) {
+	// Retrieve the bidirectional_map of group id's
+	bidirectional_map<uint32_t,uint32_t>& group_id_map =
+		rewrite_map[virtual_switch->get_id()]
+			.group_id_map;
+
+	// Check if a new id needs to be allocated
+	uint32_t group_id;
+	if( !group_id_map.has_virtual(virtual_group_id) ) {
+		group_id = group_id_allocator.new_id();
+		group_id_map.insert( virtual_group_id, group_id );
+	}
+	else {
+		group_id = group_id_map.get_physical( virtual_group_id );
+	}
+
+	// Return the found/created id
+	return group_id;
+}
+
 bool PhysicalSwitch::rewrite_action_set(
 		fluid_msg::ActionSet& old_action_set,
 		fluid_msg::ActionSet& action_set_with_output,
 		fluid_msg::ActionSet& action_set_without_output,
 		bool& has_action_with_group,
-		VirtualSwitch* virtual_switch) {
+		const VirtualSwitch* virtual_switch) {
+	// Initialize the variable tracking if a group action is in the set
+	has_action_with_group = false;
+
 	// Loop over all actions
 	for( fluid_msg::Action* action : old_action_set.action_set() ) {
 		if( action->type() == fluid_msg::of13::OFPAT_OUTPUT ) {
 			fluid_msg::of13::OutputAction* output =
 				(fluid_msg::of13::OutputAction*) action;
 
-			uint32_t port_no;
+			// Retrieve the output group map
+			std::unordered_map<uint32_t,OutputGroup>& output_groups =
+				rewrite_map[virtual_switch->get_id()]
+					.output_groups;
+
+			// Get the group id to forward to
+			uint32_t group_id;
 			if( output->port()==fluid_msg::of13::OFPP_CONTROLLER ) {
-				port_no = output->port();
+				group_id = 0; // TODO Special case for output to controller
 			}
 			else {
-				port_no = virtual_switch->get_virtual_port_no(
-						features.datapath_id,
-						output->port());
+				auto output_group_pair = output_groups.find(output->port());
+				if( output_group_pair == output_groups.end() ) {
+					BOOST_LOG_TRIVIAL(warning) << *this
+						<< " unknown output port in action list";
+					return false;
+				}
+				else {
+					group_id = output_group_pair->second.group_id;
+				}
 			}
 
-			uint32_t group_id = physical_port_to_group_id( port_no );
-
+			// Add the action to the action set
 			action_set_with_output.add_action(
 				new fluid_msg::of13::GroupAction(group_id));
 		}
 		else if( action->type() == fluid_msg::of13::OFPAT_GROUP ) {
-			// TODO Rewrite group number
+			fluid_msg::of13::GroupAction* group_action =
+				(fluid_msg::of13::GroupAction*) action;
+
+			// Get the rewritten group id
+			uint32_t group_id = get_rewritten_group_id(
+					group_action->group_id(),
+					virtual_switch);
+
+			// Pass upwards that the action has a group action in
+			// the set
 			has_action_with_group = true;
-			action_set_with_output.add_action(action->clone());
-			action_set_without_output.add_action(action->clone());
+
+			// Add the rewritten group actions to both action sets
+			action_set_without_output.add_action(
+					new fluid_msg::of13::GroupAction(group_id));
 		}
 		else if( action->type() == fluid_msg::of13::OFPAT_SET_QUEUE ) {
 			// Set queue actions are not supported yet
@@ -197,20 +244,55 @@ bool PhysicalSwitch::rewrite_action_set(
 bool PhysicalSwitch::rewrite_action_list(
 		fluid_msg::ActionList& old_action_list,
 		fluid_msg::ActionList& new_action_list,
-		VirtualSwitch* virtual_switch) {
+		const VirtualSwitch* virtual_switch) {
 	for( fluid_msg::Action* action : old_action_list.action_list() ) {
 		if( action->type() == fluid_msg::of13::OFPAT_OUTPUT ) {
-			// TODO Rewrite output port
-			new_action_list.add_action(action->clone());
+			fluid_msg::of13::OutputAction* output =
+				(fluid_msg::of13::OutputAction*) action;
+
+			// Retrieve the output group map
+			std::unordered_map<uint32_t,OutputGroup>& output_groups =
+				rewrite_map[virtual_switch->get_id()]
+					.output_groups;
+
+			// Get the group id to forward to
+			uint32_t group_id;
+			if( output->port()==fluid_msg::of13::OFPP_CONTROLLER ) {
+				group_id = 0; // TODO Special case for output to controller
+			}
+			else {
+				auto output_group_pair = output_groups.find(output->port());
+				if( output_group_pair == output_groups.end() ) {
+					BOOST_LOG_TRIVIAL(warning) << *this
+						<< " unknown output port in action list";
+					return false;
+				}
+				else {
+					group_id = output_group_pair->second.group_id;
+				}
+			}
+
+			// Add the action to the action set
+			new_action_list.add_action(
+				new fluid_msg::of13::GroupAction(group_id));
 		}
 		else if( action->type() == fluid_msg::of13::OFPAT_GROUP ) {
-			// TODO Rewrite group number
-			new_action_list.add_action(action->clone());
+			fluid_msg::of13::GroupAction* group_action =
+				(fluid_msg::of13::GroupAction*) action;
+
+			// Get the rewritten group id
+			uint32_t group_id = get_rewritten_group_id(
+					group_action->group_id(),
+					virtual_switch);
+
+			// Add the rewritten action to the new action set
+			new_action_list.add_action(
+					new fluid_msg::of13::GroupAction(group_id));
 		}
 		else if( action->type() == fluid_msg::of13::OFPAT_SET_QUEUE ) {
 			// Set queue actions are not supported yet
 			BOOST_LOG_TRIVIAL(warning) << *this
-				<< " received flowmod with set-queue in apply-actions";
+				<< " set-queue in action list";
 			return false;
 		}
 		else {

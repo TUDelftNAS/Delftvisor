@@ -90,9 +90,13 @@ namespace{
 	void ugly_hack() {
 		fluid_msg::of13::WriteActions w;
 		fluid_msg::of13::ApplyActions a;
+		fluid_msg::ActionList l;
+		fluid_msg::ActionSet s;
 		SwitchVLANTag t;
 		t.add_to_actions(w);
 		t.add_to_actions(a);
+		t.add_to_actions(l);
+		t.add_to_actions(s);
 	}
 }
 
