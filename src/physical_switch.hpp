@@ -215,14 +215,10 @@ public:
 	/// Get the ports on this switch
 	const std::unordered_map<uint32_t,Port>& get_ports() const;
 
-	/// Register that a virtual switch wants to be notified
-	void register_port_interest(
-		uint32_t port,
-		boost::shared_ptr<VirtualSwitch> switch_pointer);
-	/// Delete a notification interest
-	void remove_port_interest(
-		uint32_t port,
-		boost::shared_ptr<VirtualSwitch> switch_pointer);
+	/// Register a virtual switch interest
+	void register_interest(boost::shared_ptr<VirtualSwitch> virtual_switch);
+	/// Remove a virtual switch interest
+	void remove_interest(boost::shared_ptr<VirtualSwitch> virtual_switch);
 
 	/// Allow creating a shared pointer of this class
 	pointer shared_from_this();

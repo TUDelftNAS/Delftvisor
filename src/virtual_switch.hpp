@@ -81,6 +81,12 @@ public:
 	int get_id() const;
 	/// Get the slice this virtual switch is in
 	const Slice* get_slice() const;
+	/// Get all the ports on this switch
+	/**
+	 * Return the mapping with all ports and on
+	 * what physical switch each port exists.
+	 */
+	const std::map<uint32_t,uint64_t>& get_port_to_physical_switch() const;
 
 	/// Add a port to this virtual switch
 	void add_port(

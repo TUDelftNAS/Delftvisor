@@ -31,6 +31,10 @@ const Slice* VirtualSwitch::get_slice() const {
 	return slice;
 }
 
+const std::map<uint32_t,uint64_t>& VirtualSwitch::get_port_to_physical_switch() const {
+	return port_to_dependent_switch;
+}
+
 void VirtualSwitch::add_port(
 		uint32_t port_number,
 		uint64_t physical_datapath_id,
@@ -110,11 +114,9 @@ void VirtualSwitch::start() {
 			auto sw_ptr =
 				hypervisor->
 					get_physical_switch_by_datapath_id(dep_sw.first);
-			for( const auto& port : dep_sw.second.port_map.get_virtual_to_physical() ) {
-				sw_ptr->register_port_interest(
-							port.second,
-							shared_from_this());
-			}
+
+			sw_ptr->register_interest(shared_from_this());
+
 			// Update the rules in the physical switch to forward
 			// packets from those ports to the actual flow tables
 			sw_ptr->update_dynamic_rules();
@@ -143,15 +145,11 @@ void VirtualSwitch::stop() {
 			auto sw_ptr =
 				hypervisor->
 					get_physical_switch_by_datapath_id(dep_sw.first);
-			for( const auto& port : dep_sw.second.port_map.get_virtual_to_physical() ) {
-				// Remove the registration
-				sw_ptr->remove_port_interest(
-							port.second,
-							shared_from_this());
 
-				// Update the port rule
-				sw_ptr->update_dynamic_rules();
-			}
+			sw_ptr->remove_interest(shared_from_this());
+
+			// Update the port rule
+			sw_ptr->update_dynamic_rules();
 		}
 	}
 }
@@ -202,7 +200,7 @@ void VirtualSwitch::check_online() {
 		}
 	}
 
-	//BOOST_LOG_TRIVIAL(info) << *this << " checked for online, all_online_and_reachable=" << all_online_and_reachable << " state=" << state;
+	BOOST_LOG_TRIVIAL(trace) << *this << " checked for online, all_online_and_reachable=" << all_online_and_reachable << " state=" << state;
 
 	// Update this virtual switch state if needed
 	if( all_online_and_reachable && state==down ) {
@@ -308,8 +306,11 @@ void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) 
 		metadata_tag.add_to_match(flowmod_copy_2);
 
 		// Rewrite the instructions
-		fluid_msg::of13::InstructionSet instruction_set_with_output, instruction_set_without_output;
-		fluid_msg::of13::InstructionSet old_instruction_set = flow_mod_message.instructions();
+		fluid_msg::of13::InstructionSet
+			instruction_set_with_output,
+			instruction_set_without_output;
+		fluid_msg::of13::InstructionSet old_instruction_set =
+				flow_mod_message.instructions();
 		if( !ps_ptr->rewrite_instruction_set(
 				old_instruction_set,
 				instruction_set_with_output,

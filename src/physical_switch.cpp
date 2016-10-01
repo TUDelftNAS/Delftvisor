@@ -43,17 +43,61 @@ const std::unordered_map<uint32_t,PhysicalSwitch::Port>& PhysicalSwitch::get_por
 	return ports;
 }
 
-void PhysicalSwitch::register_port_interest(
-		uint32_t port,
-		boost::shared_ptr<VirtualSwitch> switch_pointer) {
-	BOOST_LOG_TRIVIAL(trace) << *this << " interest was registered for port " << port;
-	needed_ports[port].insert(switch_pointer);
+void PhysicalSwitch::register_interest(boost::shared_ptr<VirtualSwitch> switch_pointer) {
+	BOOST_LOG_TRIVIAL(trace) << *switch_pointer << " registered interest at " << *this;
+
+	// Register the needed ports
+	for( auto& port_map_pair :
+			switch_pointer
+			->get_port_map(features.datapath_id)
+			.get_virtual_to_physical() ) {
+		needed_ports[port_map_pair.second].insert(switch_pointer);
+	}
+
+	// Create the rewrite entry
+	RewriteEntry& rewrite_entry = rewrite_map[switch_pointer->get_id()];
+	rewrite_entry.flood_group_id = group_id_allocator.new_id();
+
+	// Loop over all virtual ports and reserve group id's to output
+	// for them
+	for( const auto& virtual_physical_pair :
+			switch_pointer->get_port_to_physical_switch() ) {
+		const uint32_t& virtual_port  = virtual_physical_pair.first;
+
+		// Create the output group and store that no rule has
+		// been pushed to the switch, on the next call to
+		// update_dynamic_rules will the group be created.
+		OutputGroup& output_group = rewrite_entry.output_groups[virtual_port];
+		output_group.group_id     = group_id_allocator.new_id();
+		output_group.state        = OutputGroup::State::no_rule;
+	}
 }
-void PhysicalSwitch::remove_port_interest(
-		uint32_t port,
-		boost::shared_ptr<VirtualSwitch> switch_pointer) {
-	BOOST_LOG_TRIVIAL(trace) << *this << " interest was unregistered for port " << port;
-	needed_ports.at(port).erase(switch_pointer);
+
+void PhysicalSwitch::remove_interest(boost::shared_ptr<VirtualSwitch> switch_pointer) {
+	BOOST_LOG_TRIVIAL(trace) << *switch_pointer << " removed interest at " << *this;
+
+	// Remove the needed ports
+	for( auto& port_map_pair :
+			switch_pointer->get_port_map(features.datapath_id).get_virtual_to_physical() ) {
+		needed_ports.at(port_map_pair.second).erase(switch_pointer);
+	}
+
+	// Retrieve the rewrite_entry
+	RewriteEntry& rewrite_entry = rewrite_map.at(switch_pointer->get_id());
+	// TODO Delete flood group and return id
+
+	// Loop over all virtual ports and reserve group id's to output
+	// for them
+	for( const auto& virtual_physical_pair :
+			switch_pointer->get_port_to_physical_switch() ) {
+		const uint32_t& virtual_port  = virtual_physical_pair.first;
+
+		// TODO Delete output group id's and return id's, clear output_groups
+	}
+
+	// TODO Delete the used group id's and return id's
+
+	// TODO Delete the pushed flowmods
 }
 
 void PhysicalSwitch::send_request_message(
