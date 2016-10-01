@@ -334,7 +334,63 @@ void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) 
 
 void VirtualSwitch::handle_group_mod(fluid_msg::of13::GroupMod& group_mod_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received group_mod";
-	// TODO
+
+	for( auto& ps_pair : dependent_switches ) {
+		// Fetch a shared pointer to the dependent switch
+		auto ps_ptr = hypervisor->get_physical_switch_by_datapath_id(ps_pair.first);
+
+		fluid_msg::of13::GroupMod group_mod(group_mod_message);
+
+		// Rewrite the group id for the physical switch
+		group_mod.group_id(
+			ps_ptr->get_rewritten_group_id(
+				group_mod.group_id(),
+				this) );
+
+		// Loop over the buckets rewriting the action set
+		std::vector<fluid_msg::of13::Bucket> new_buckets;
+		for( fluid_msg::of13::Bucket& bucket : group_mod.buckets() ) {
+			fluid_msg::ActionSet old_action_set = bucket.get_actions();
+			fluid_msg::ActionSet output_action_set, group_action_set;
+			bool has_group = false;
+
+			// Do the actual rewriting
+			if( !ps_ptr->rewrite_action_set(
+					old_action_set,
+					output_action_set,
+					group_action_set,
+					has_group,
+					this) ) {
+				BOOST_LOG_TRIVIAL(warning) << *this
+					<< " received groupmod with problematic action set";
+				return;
+			}
+
+			// Add the bucket to the list of new buckets, if the bucket contains
+			// a group action take the action set without the output actions otherwise
+			// take the action set without the group actions
+			if( has_group ) {
+				new_buckets.emplace_back(
+					bucket.weight(),
+					bucket.watch_port(),  // TODO Rewrite watch_port
+					bucket.watch_group(), // TODO Rewrite watch_group
+					group_action_set);
+			}
+			else {
+				new_buckets.emplace_back(
+					bucket.weight(),
+					bucket.watch_port(),  // TODO Rewrite watch_port
+					bucket.watch_group(), // TODO Rewrite watch_group
+					output_action_set);
+			}
+		}
+		// Actually set the new buckets in the message
+		group_mod.buckets(new_buckets);
+
+		// Send the message to the virtual switch
+		// TODO Use send_response function so xid is saved
+		ps_ptr->send_message(group_mod);
+	}
 }
 
 void VirtualSwitch::handle_meter_mod(fluid_msg::of13::MeterMod& meter_mod_message) {
