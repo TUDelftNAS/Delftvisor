@@ -28,6 +28,8 @@ private:
 	std::unordered_map<int,PhysicalSwitch::pointer> physical_switches;
 	/// A map from datapath id to switch id
 	std::unordered_map<uint64_t,int> datapath_id_to_switch_id;
+	/// The virtual switches registered at this hypervisor
+	std::unordered_map<int,boost::shared_ptr<VirtualSwitch>> virtual_switches;
 
 	/// A signal has been received
 	void handle_signals(
@@ -58,6 +60,9 @@ public:
 	PhysicalSwitch::pointer get_physical_switch(int switch_id) const;
 	/// Lookup a physical switch by datapath_id
 	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(uint64_t datapath_id) const;
+
+	/// Loopkup a virtual switch by switch id
+	const VirtualSwitch* get_virtual_switch(int switch_id) const;
 
 	/// Get the physical switches in the hypervisor
 	const std::unordered_map<int,PhysicalSwitch::pointer>& get_physical_switches() const;

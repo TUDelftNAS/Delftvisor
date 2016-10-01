@@ -105,6 +105,16 @@ PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(
 	}
 }
 
+const VirtualSwitch* Hypervisor::get_virtual_switch(int switch_id) const {
+	auto it = virtual_switches.find(switch_id);
+	if( it == virtual_switches.end() ) {
+		return nullptr;
+	}
+	else {
+		return it->second.get();
+	}
+}
+
 const std::unordered_map<int,PhysicalSwitch::pointer>& Hypervisor::get_physical_switches() const {
 	return physical_switches;
 }
@@ -151,6 +161,8 @@ void Hypervisor::stop() {
 	// and delete the shared pointers
 	physical_switches.clear();
 
+	// Delete all shared pointer to virtual switches in this object
+	virtual_switches.clear();
 	// Stop all of the slices
 	for( Slice& s : slices ) s.stop();
 	// and delete all the virtual switch shared pointers
@@ -267,6 +279,8 @@ void Hypervisor::load_configuration( std::string filename ) {
 
 			VirtualSwitch::pointer virtual_switch =
 				slice.get_virtual_switch_by_datapath_id(datapath_id);
+
+			virtual_switches[virtual_switch->get_id()] = virtual_switch;
 
 			for( const auto &port_pair : virtual_switch_ptree.get_child("ports") ) {
 				auto& port_ptree = port_pair.second;
