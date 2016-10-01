@@ -352,4 +352,157 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Send the message
 		send_message(flowmod);
 	}
+
+	// Loop over all virtual switches for which we have rewrite data
+	for( auto& rewrite_entry_pair : rewrite_map ) {
+		const int& virtual_switch_id        = rewrite_entry_pair.first;
+		auto& rewrite_entry                 = rewrite_entry_pair.second;
+
+		// Get the virtual switch for which we are going to update the
+		const VirtualSwitch* virtual_switch =
+			hypervisor->get_virtual_switch(virtual_switch_id);
+
+		// Loop over all ports on the virtual switch
+		for( auto& port_pair : virtual_switch->get_port_to_physical_switch() ) {
+			const uint32_t& virtual_port  = port_pair.first;
+			const uint64_t& physical_dpid = port_pair.second;
+
+			// Retrieve more references and pointers so we can easily use
+			// those below
+			PhysicalSwitch::pointer physical_switch =
+				hypervisor->get_physical_switch_by_datapath_id(physical_dpid);
+			PhysicalSwitch::OutputGroup& output_group =
+				rewrite_entry.output_groups.at(virtual_port);
+
+			// Determine what state this rule should have
+			PhysicalSwitch::OutputGroup::State new_state;
+			uint32_t new_output_port;
+
+			// If it is a port on this switch
+			if( physical_dpid == features.datapath_id ) {
+				// Retrieve the mapping from local to physical port id
+				const auto& port_map = virtual_switch->get_port_map(features.datapath_id);
+
+				// Get the physical port id
+				new_output_port = port_map.get_physical(virtual_port);
+
+				auto port_pair = ports.find(new_output_port);
+				// If the port is not yet found or to a host
+				if( port_pair==ports.end() || port_pair->second.link==nullptr ) {
+					new_state = PhysicalSwitch::OutputGroup::State::host_rule;
+				}
+				// If the port is to a shared link
+				else {
+					new_state = PhysicalSwitch::OutputGroup::State::shared_link_rule;
+				}
+			}
+			// If it is a port on another switch that is 1 hop away
+			else if(dist.at(physical_switch->get_id()) == 1) {
+				new_state       = PhysicalSwitch::OutputGroup::State::switch_one_hop_rule;
+				new_output_port = next.at(physical_switch->get_id());
+			}
+			// If it is a port on another switch
+			else {
+				new_state       = PhysicalSwitch::OutputGroup::State::switch_rule;
+				new_output_port = next.at(physical_switch->get_id());
+			}
+
+			// If the states and output ports are the same the group doesn't
+			// need to be updated
+			if( output_group.state==new_state &&
+				output_group.output_port==new_output_port ) {
+				continue;
+			}
+
+			// Create the new group to
+			fluid_msg::of13::GroupMod group_mod;
+			// If this group doesn't exist it is an add command
+			if( output_group.state == PhysicalSwitch::OutputGroup::State::no_rule ) {
+				group_mod.command(fluid_msg::of13::OFPGC_ADD);
+			}
+			// Otherwise it is an edit command
+			else {
+				group_mod.command(fluid_msg::of13::OFPGC_MODIFY);
+			}
+			group_mod.group_type(fluid_msg::of13::OFPGT_INDIRECT);
+			group_mod.group_id(output_group.group_id);
+
+			// Update the state and output port in the output_group
+			output_group.state       = new_state;
+			output_group.output_port = new_output_port;
+
+			// Create the bucket to add to the group mod
+			fluid_msg::of13::Bucket bucket;
+			bucket.weight(0);
+			bucket.watch_port(fluid_msg::of13::OFPP_ANY);
+			bucket.watch_group(fluid_msg::of13::OFPG_ANY);
+
+			// Determine what actions to add to the bucket and do it
+			fluid_msg::ActionSet action_set;
+			if( new_state == PhysicalSwitch::OutputGroup::State::host_rule ) {
+				action_set.add_action(
+					new fluid_msg::of13::OutputAction(
+						new_output_port,
+						fluid_msg::of13::OFPCML_NO_BUFFER));
+			}
+			else if( new_state == PhysicalSwitch::OutputGroup::State::shared_link_rule ) {
+				// Push the VLAN Tag
+				action_set.add_action(
+					new fluid_msg::of13::PushVLANAction(0x8100));
+
+				// Set the data in the VLAN Tag
+				PortVLANTag vlan_tag;
+				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
+				vlan_tag.set_port(VLANTag::max_port_id);
+				vlan_tag.add_to_actions(action_set);
+
+				// Output the packet over the proper port
+				action_set.add_action(
+					new fluid_msg::of13::OutputAction(
+						new_output_port,
+						fluid_msg::of13::OFPCML_NO_BUFFER));
+			}
+			else if( new_state == PhysicalSwitch::OutputGroup::State::switch_one_hop_rule ) {
+				// Push the VLAN Tag
+				action_set.add_action(
+					new fluid_msg::of13::PushVLANAction(0x8100));
+
+				// Set the data in the VLAN Tag
+				PortVLANTag vlan_tag;
+				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
+				vlan_tag.set_port(new_output_port);
+				vlan_tag.add_to_actions(action_set);
+
+				// Output the packet over the proper port
+				action_set.add_action(
+					new fluid_msg::of13::OutputAction(
+						new_output_port,
+						fluid_msg::of13::OFPCML_NO_BUFFER));
+			}
+			// Otherwise the state needs to be switch_rule
+			else {
+				// Push the VLAN Tag
+				action_set.add_action(
+					new fluid_msg::of13::PushVLANAction(0x8100));
+
+				// Set the data in the VLAN Tag
+				PortVLANTag vlan_tag;
+				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
+				vlan_tag.set_port(new_output_port);
+				vlan_tag.add_to_actions(action_set);
+
+				// Output the packet over the proper port
+				action_set.add_action(
+					new fluid_msg::of13::GroupAction(
+						switch_id_to_group_id.at(physical_switch->get_id())));
+			}
+
+			// Add the bucket
+			bucket.actions(action_set);
+			group_mod.add_bucket(bucket);
+
+			// Send the message
+			send_message(group_mod);
+		}
+	}
 }
