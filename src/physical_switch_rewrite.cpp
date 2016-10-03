@@ -9,6 +9,7 @@ bool PhysicalSwitch::rewrite_instruction_set(
 		fluid_msg::of13::InstructionSet& old_instruction_set,
 		fluid_msg::of13::InstructionSet& instruction_set_with_output,
 		fluid_msg::of13::InstructionSet& instruction_set_without_output,
+		bool& has_write_action_group,
 		const VirtualSwitch* virtual_switch) {
 	uint64_t metadata_tag  = 0;
 	uint64_t metadata_mask = 0;
@@ -54,18 +55,17 @@ bool PhysicalSwitch::rewrite_instruction_set(
 			fluid_msg::ActionSet action_set_with_output, action_set_without_output;
 
 			// Rewrite the action sets
-			bool has_action_with_group = false;
 			if( !rewrite_action_set(
 					old_action_set,
 					action_set_with_output,
 					action_set_without_output,
-					has_action_with_group,
+					has_write_action_group,
 					virtual_switch) ) {
 				return false;
 			}
 
 			// If a group action was used set the metadata group bit
-			if( has_action_with_group ) {
+			if( has_write_action_group ) {
 				metadata_tag  |= 1;
 				metadata_mask |= 1;
 			}

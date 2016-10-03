@@ -256,6 +256,7 @@ public:
 		fluid_msg::of13::InstructionSet& old_instruction_set,
 		fluid_msg::of13::InstructionSet& instruction_set_with_output,
 		fluid_msg::of13::InstructionSet& instruction_set_without_output,
+		bool& has_action_with_group,
 		const VirtualSwitch* virtual_switch);
 	/// Rewrite an action set for this physical switch
 	bool rewrite_action_set(
