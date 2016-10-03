@@ -275,7 +275,41 @@ void VirtualSwitch::handle_barrier_request(fluid_msg::of13::BarrierRequest& barr
 
 void VirtualSwitch::handle_packet_out(fluid_msg::of13::PacketOut& packet_out_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received packet_out";
-	// TODO
+
+	if( packet_out_message.in_port() != fluid_msg::of13::OFPP_CONTROLLER ) {
+		// TODO Logical handling of other in_ports
+		BOOST_LOG_TRIVIAL(warning) << *this
+			<< " received packet_out where in_port!=controller";
+		return;
+	}
+
+	// TODO Buffer id rewriting?
+
+	// TODO Find a better switch to output over, scan action list to
+	// see what port it would be output to and send it to that switch
+
+	// Send the packet to the first found switch
+	PhysicalSwitch::pointer ps_ptr =
+		hypervisor->get_physical_switch_by_datapath_id(
+			dependent_switches.begin()->first);
+
+	// Rewrite the action list
+	fluid_msg::ActionList old_action_list = packet_out_message.actions();
+	fluid_msg::ActionList new_action_list;
+	if( !ps_ptr->rewrite_action_list(
+			old_action_list,
+			new_action_list,
+			this) ) {
+		BOOST_LOG_TRIVIAL(warning) << *this
+			<< " found problematic action in packet out message";
+		return;
+	}
+
+	// Set the rewritten actions in the message
+	packet_out_message.actions(new_action_list);
+
+	// TODO Replace with function that saves xid
+	ps_ptr->send_message(packet_out_message);
 }
 
 void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) {
