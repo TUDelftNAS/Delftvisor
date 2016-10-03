@@ -233,17 +233,20 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 	if( switch_pointers != needed_ports.end() ) {
 		BOOST_LOG_TRIVIAL(trace) << *this << " PortStatus port=" << switch_pointers->first << " dep_sw_amount=" << switch_pointers->second.size();
 
+		uint32_t physical_port_no = port.port_no();
+
 		for( auto& switch_pointer : switch_pointers->second ) {
 			// Skip if this virtual switch is not online
 			if( !switch_pointer->is_connected() ) continue;
-
-			BOOST_LOG_TRIVIAL(trace) << *this << "\tPortStatus dpid=" << features.datapath_id << ", port_no=" << port.port_no();
 
 			// Rewrite the port number
 			port.port_no(
 				switch_pointer->
 					get_port_map(features.datapath_id)
-						.get_virtual(port.port_no()));
+						.get_virtual(physical_port_no));
+
+			BOOST_LOG_TRIVIAL(trace) << *this << "\tPortStatus dpid=" << features.datapath_id << ", port_no=" << port.port_no();
+
 			// Set the port data with the rewritten port number into the port status message
 			port_status_message.desc( port );
 
