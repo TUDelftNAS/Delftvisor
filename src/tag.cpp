@@ -146,6 +146,12 @@ MetadataTag::MetadataTag() :
 	Tag<uint64_t>::Tag() {
 }
 
+MetadataTag::MetadataTag(uint64_t value, uint64_t mask_in) :
+	Tag<uint64_t>::Tag() {
+	tag  = value;
+	mask = mask_in;
+}
+
 void MetadataTag::set_group(bool group_id) {
 	set_value<1,0>(group_id?1:0);
 }

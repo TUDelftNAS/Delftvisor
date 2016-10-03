@@ -121,7 +121,10 @@ public:
 	static constexpr int num_virtual_switch_bits = 13;
 	static constexpr uint16_t max_virtual_switch_id = make_mask(num_virtual_switch_bits);
 
+	/// Create an empty metadata tag
 	MetadataTag();
+	/// Create a metadata tag from raw values
+	MetadataTag(uint64_t value, uint64_t mask);
 
 	/// Set the group in this tag
 	void set_group(bool group);

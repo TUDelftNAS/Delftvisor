@@ -105,7 +105,7 @@ PhysicalSwitch::pointer Hypervisor::get_physical_switch_by_datapath_id(
 	}
 }
 
-const VirtualSwitch* Hypervisor::get_virtual_switch(int switch_id) const {
+VirtualSwitch* Hypervisor::get_virtual_switch(int switch_id) const {
 	auto it = virtual_switches.find(switch_id);
 	if( it == virtual_switches.end() ) {
 		return nullptr;

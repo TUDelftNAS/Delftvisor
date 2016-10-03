@@ -62,7 +62,7 @@ public:
 	PhysicalSwitch::pointer get_physical_switch_by_datapath_id(uint64_t datapath_id) const;
 
 	/// Loopkup a virtual switch by switch id
-	const VirtualSwitch* get_virtual_switch(int switch_id) const;
+	VirtualSwitch* get_virtual_switch(int switch_id) const;
 
 	/// Get the physical switches in the hypervisor
 	const std::unordered_map<int,PhysicalSwitch::pointer>& get_physical_switches() const;
