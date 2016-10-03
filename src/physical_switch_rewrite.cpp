@@ -303,3 +303,13 @@ bool PhysicalSwitch::rewrite_action_list(
 
 	return true;
 }
+
+bool PhysicalSwitch::rewrite_match(
+		fluid_msg::of13::Match& match,
+		const VirtualSwitch* virtual_switch) {
+	fluid_msg::of13::InPort* in_port = match.in_port();
+	if( in_port != nullptr ) {
+		const auto& port_map = virtual_switch->get_port_map(features.datapath_id);
+		in_port->value(port_map.get_physical(in_port->value()));
+	}
+}

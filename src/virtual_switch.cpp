@@ -322,7 +322,12 @@ void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) 
 		// Fetch a shared pointer to the dependent switch
 		auto ps_ptr = hypervisor->get_physical_switch_by_datapath_id(ps_pair.first);
 
-		// We need to push 2 rules to the physical switch
+		// Rewrite match in_port
+		fluid_msg::of13::Match match = flow_mod_message.match();
+		ps_ptr->rewrite_match(match,this);
+		flow_mod_message.match(match);
+
+		// 2 rules need to be pushed to the physical switch
 		fluid_msg::of13::FlowMod flowmod_copy_1(flow_mod_message);
 		fluid_msg::of13::FlowMod flowmod_copy_2(flow_mod_message);
 

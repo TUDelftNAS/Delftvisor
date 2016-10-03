@@ -269,6 +269,10 @@ public:
 		fluid_msg::ActionList& old_action_list,
 		fluid_msg::ActionList& new_action_list,
 		const VirtualSwitch* virtual_switch);
+	/// Rewrite the match of an flowmod
+	bool rewrite_match(
+		fluid_msg::of13::Match& match,
+		const VirtualSwitch* virtual_switch);
 
 	/// The message handling functions
 	void handle_error(fluid_msg::of13::Error& error_message);
