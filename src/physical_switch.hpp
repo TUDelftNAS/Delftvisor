@@ -315,6 +315,11 @@ public:
 	void handle_get_async_reply  (fluid_msg::of13::GetAsyncReply& async_reply_message);
 	void handle_set_async        (fluid_msg::of13::SetAsync& set_async_message);
 
+	/// Print a quick identifyable name for this physical switch
+	void print_to_stream(std::ostream& os) const;
+	/// Print almost complete debugging info about this physical switch
+	void print_detailed(std::ostream& os) const;
+
 	void handle_multipart_request_desc          (fluid_msg::of13::MultipartRequestDesc& multipart_request_message);
 	void handle_multipart_request_flow          (fluid_msg::of13::MultipartRequestFlow& multipart_request_message);
 	void handle_multipart_request_aggregate     (fluid_msg::of13::MultipartRequestAggregate& multipart_request_message);
@@ -345,7 +350,4 @@ public:
 	void handle_multipart_reply_table_features(fluid_msg::of13::MultipartReplyTableFeatures& multipart_request_message);
 	void handle_multipart_reply_port_desc     (fluid_msg::of13::MultipartReplyPortDescription& multipart_request_message);
 	void handle_multipart_reply_experimenter  (fluid_msg::of13::MultipartReplyExperimenter& multipart_request_message);
-
-	/// Print this physical switch to a stream
-	void print_to_stream(std::ostream& os) const;
 };

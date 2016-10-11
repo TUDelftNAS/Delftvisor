@@ -6,6 +6,8 @@
 
 #include <boost/log/trivial.hpp>
 
+#include <fstream>
+
 void PhysicalSwitch::create_static_rules() {
 	// Create the topology discovery forward rule
 	make_topology_discovery_rule();
@@ -570,6 +572,15 @@ void PhysicalSwitch::update_dynamic_rules() {
 
 		send_message(group_mod);
 	}
+
+	// TODO Remove this section
+	if( state == registered ) {
+		std::ostringstream string_stream;
+		string_stream << "dpid_" << features.datapath_id << ".dat";
+		std::ofstream file(string_stream.str());
+		print_detailed(file);
+		BOOST_LOG_TRIVIAL(trace) << "Wrote to file " << string_stream.str();
+	}
 }
 
 uint32_t PhysicalSwitch::get_forward_group_id(
@@ -587,4 +598,57 @@ uint32_t PhysicalSwitch::get_forward_group_id(
 		group_id = switch_group_it->second.group_id;
 	}
 	return group_id;
+}
+
+void PhysicalSwitch::print_detailed(std::ostream& os) const {
+	print_to_stream(os); os << " = {\n";
+	os << "\tports = [\n";
+	for( auto port_pair : ports ) {
+		os << "\t\t{\n";
+		os << "\t\t\tid = " << port_pair.first << "\n";
+		os << "\t\t\tneeded-ports = { ";
+		auto needed_port_it = needed_ports.find(port_pair.first);
+		if( needed_port_it != needed_ports.end() ) {
+			for( auto vs_ptr : needed_port_it->second ) {
+				os << *vs_ptr << " ";
+			}
+		}
+		os << "}\n";
+		os << "\t\t}\n";
+	}
+	os << "\t]\n";
+	os << "\trewrite-map = [\n";
+	for( auto rewrite_map_pair : rewrite_map ) {
+		os << "\t\t{\n";
+		os << "\t\t\tvirtual-switch-id = " << rewrite_map_pair.first << "\n";
+		os << "\t\t\tflood-group-id = " << rewrite_map_pair.second.flood_group_id << "\n";
+		os << "\t\t\tgroup-id-map = [\n";
+		for( auto group_id_pair : rewrite_map_pair.second.group_id_map.get_virtual_to_physical() ) {
+			os << "\t\t\t\t" << group_id_pair.first << " <=> " << group_id_pair.second << "\n";
+		}
+		os << "\t\t\t]\n";
+		os << "\t\t\toutput-groups = [\n";
+		for( auto output_group_pair : rewrite_map_pair.second.output_groups ) {
+			os << "\t\t\t\t{\n";
+			os << "\t\t\t\t\tvirtual-port-id = " << output_group_pair.first << "\n";
+			os << "\t\t\t\t\tgroup-id = " << output_group_pair.second.group_id << "\n";
+			os << "\t\t\t\t\toutput-port = " << output_group_pair.second.output_port << "\n";
+			os << "\t\t\t\t\tstate = " << output_group_pair.second.state << "\n";
+			os << "\t\t\t\t}\n";
+		}
+		os << "\t\t\t]\n";
+		os << "\t\t}\n";
+	}
+	os << "\t]\n";
+	os << "\tswitch-to-group = [\n";
+	for( auto switch_group_id_pair : switch_id_to_group_id ) {
+		os << "\t\t{\n";
+		os << "\t\t\tphysical-switch-id = " << switch_group_id_pair.first << "\n";
+		os << "\t\t\tgroup-id = " << switch_group_id_pair.second.group_id << "\n";
+		os << "\t\t\toutput-port = " << switch_group_id_pair.second.output_port << "\n";
+		os << "\t\t\tstate = " << switch_group_id_pair.second.state << "\n";
+		os << "\t\t}\n";
+	}
+	os << "\t]\n";
+	os << "}\n";
 }
