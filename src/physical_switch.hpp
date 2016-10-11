@@ -94,14 +94,6 @@ private:
 		uint32_t,
 		Port> ports;
 
-	/// The slice id's that have a forwarding rule set
-	/**
-	 * If a packet arrives over a shared link the rule with table_id=1 and
-	 * priority=30. This set contains all the slice id's for which a rule
-	 * is already pushed.
-	 */
-	std::set<int> used_slice_ids;
-
 	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
 	/**
 	 * This structure is separate from ports since not all
@@ -160,13 +152,27 @@ private:
 	 * created.
 	 */
 	std::unordered_map<int, RewriteEntry> rewrite_map;
+	/// An entry in the switch forward group
+	struct SwitchForwardGroup {
+		uint32_t group_id;
+		uint32_t output_port;
+		enum State {
+			no_rule,
+			forward_rule
+		} state;
+	};
 	/// A mapping from physical switch id -> group id
 	/**
 	 * Every physical switch has a group that forward to it,
 	 * this map contains the group id reserved to forward to
-	 * that switch.
+	 * that switch. This group is only used when the switch
+	 * is more than 1 hop away from this switch. These groups
+	 * are created reactively when needed.
 	 */
-	std::unordered_map<int, uint32_t> switch_id_to_group_id;
+	std::unordered_map<int, SwitchForwardGroup> switch_id_to_group_id;
+	/// Get a group id to forward traffic to
+	uint32_t get_forward_group_id(
+		const PhysicalSwitch* physical_switch);
 
 
 	/// The timer that when fired sends a topology discovery packet

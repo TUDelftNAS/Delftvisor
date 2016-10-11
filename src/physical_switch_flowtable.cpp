@@ -202,7 +202,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 				new fluid_msg::of13::GoToTable(2));
 			// Add the metadata write instruction
 			MetadataTag metadata_tag;
-			metadata_tag.set_group(0);
+			metadata_tag.set_group(false);
 			metadata_tag.set_virtual_switch(virtual_switch_id);
 			metadata_tag.add_to_instructions(flowmod_0);
 		}
@@ -237,36 +237,35 @@ void PhysicalSwitch::update_dynamic_rules() {
 
 		// Send the flowmods
 		send_message(flowmod_0);
-		if( current_state != Port::State::drop_rule ) {
-			send_message(flowmod_1);
-		}
+		send_message(flowmod_1);
 
-		// TODO Update FLOOD port group
-	}
-
-	// Loop over all virtual switches and forward traffic that arrives
-	// over a shared link to the correct virtual switch
-	for( const auto& needed_port_pair : needed_ports ) {
-		for( const auto& virtual_switch : needed_port_pair.second ) {
-			// The used_slice_ids contains all the slice for which this switch
-			// already knows to what virtual switch to forward. If the slice id
-			// of a virtual switch isn't in this set add the forwarding rule and
-			// add the slice id to the set.
-			if( used_slice_ids.find(virtual_switch->get_slice()->get_id())==used_slice_ids.end() ) {
-				used_slice_ids.insert(virtual_switch->get_slice()->get_id());
-
-				// Create the message
+		// Update shared link forwarding rules, the rules in table 1 with id 30
+		auto needed_ports_it = needed_ports.find(port_no);
+		if( needed_ports_it != needed_ports.end() ) {
+			for( auto virtual_switch : needed_ports_it->second ) {
 				fluid_msg::of13::FlowMod flowmod;
 				flowmod.table_id(1);
 				flowmod.priority(30);
 				flowmod.buffer_id(OFP_NO_BUFFER);
-				flowmod.command(fluid_msg::of13::OFPFC_ADD);
+				if( prev_state!=Port::State::link_rule &&
+						current_state==Port::State::link_rule) {
+					flowmod.command(fluid_msg::of13::OFPFC_ADD);
+				}
+				else if( prev_state==Port::State::link_rule &&
+						current_state!=Port::State::link_rule ) {
+					flowmod.command(fluid_msg::of13::OFPFC_DELETE);
+				}
+				else {
+					continue;
+				}
 
 				// Create the match
 				PortVLANTag vlan_tag;
 				vlan_tag.set_port(VLANTag::max_port_id);
 				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
 				vlan_tag.add_to_match(flowmod);
+				flowmod.add_oxm_field(
+					new fluid_msg::of13::InPort(port_no));
 
 				// Add the actions
 				fluid_msg::of13::ApplyActions apply_actions;
@@ -286,10 +285,12 @@ void PhysicalSwitch::update_dynamic_rules() {
 					new fluid_msg::of13::GoToTable(2));
 
 				// Send the message
-				send_message(flowmod);
+				send_message( flowmod );
 			}
 		}
 	}
+
+	// TODO Update FLOOD port group
 
 	// Figure out what to do with traffic meant for a different switch
 	for( const auto& switch_it : hypervisor->get_physical_switches() ) {
@@ -386,9 +387,9 @@ void PhysicalSwitch::update_dynamic_rules() {
 				// Get the physical port id
 				new_output_port = port_map.get_physical(virtual_port);
 
-				auto port_pair = ports.find(new_output_port);
+				auto port_it = ports.find(new_output_port);
 				// If the port is not yet found or to a host
-				if( port_pair==ports.end() || port_pair->second.link==nullptr ) {
+				if( port_it==ports.end() || port_it->second.link==nullptr ) {
 					new_state = PhysicalSwitch::OutputGroup::State::host_rule;
 				}
 				// If the port is to a shared link
@@ -467,10 +468,16 @@ void PhysicalSwitch::update_dynamic_rules() {
 				action_set.add_action(
 					new fluid_msg::of13::PushVLANAction(0x8100));
 
+				// Get the port id on the foreign switch
+				uint32_t foreign_output_port =
+					virtual_switch
+						->get_port_map(physical_dpid)
+							.get_physical(virtual_port);
+
 				// Set the data in the VLAN Tag
 				PortVLANTag vlan_tag;
 				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
-				vlan_tag.set_port(new_output_port);
+				vlan_tag.set_port(foreign_output_port);
 				vlan_tag.add_to_actions(action_set);
 
 				// Output the packet over the proper port
@@ -485,16 +492,22 @@ void PhysicalSwitch::update_dynamic_rules() {
 				action_set.add_action(
 					new fluid_msg::of13::PushVLANAction(0x8100));
 
+				// Get the port id on the foreign switch
+				uint32_t foreign_output_port =
+					virtual_switch
+						->get_port_map(physical_dpid)
+							.get_physical(virtual_port);
+
 				// Set the data in the VLAN Tag
 				PortVLANTag vlan_tag;
 				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
-				vlan_tag.set_port(new_output_port);
+				vlan_tag.set_port(foreign_output_port);
 				vlan_tag.add_to_actions(action_set);
 
 				// Output the packet over the proper port
 				action_set.add_action(
 					new fluid_msg::of13::GroupAction(
-						switch_id_to_group_id.at(physical_switch->get_id())));
+						get_forward_group_id(physical_switch.get())));
 			}
 
 			// Add the bucket
@@ -505,4 +518,73 @@ void PhysicalSwitch::update_dynamic_rules() {
 			send_message(group_mod);
 		}
 	}
+
+	// Loop over all switch forward groups and create/update them
+	for( auto& switch_group_pair : switch_id_to_group_id ) {
+		const int& switch_id = switch_group_pair.first;
+		const uint32_t& new_output_port = next.at(switch_id);
+		SwitchForwardGroup& switch_forward_group = switch_group_pair.second;
+
+		fluid_msg::of13::GroupMod group_mod;
+		// If this group doesn't exist it is an add command
+		if( switch_forward_group.state == SwitchForwardGroup::State::no_rule ) {
+			group_mod.command(fluid_msg::of13::OFPGC_ADD);
+			switch_forward_group.state = SwitchForwardGroup::State::forward_rule;
+		}
+		// Otherwise it is an edit command
+		else {
+			// If the port hasn't changed there is no reason to send the
+			// modify message
+			if( new_output_port == switch_forward_group.output_port ) {
+				continue;
+			}
+
+			group_mod.command(fluid_msg::of13::OFPGC_MODIFY);
+		}
+		group_mod.group_type(fluid_msg::of13::OFPGT_INDIRECT);
+		group_mod.group_id(switch_forward_group.group_id);
+
+		// Create the bucket to add to the group mod
+		fluid_msg::of13::Bucket bucket;
+		bucket.weight(0);
+		bucket.watch_port(fluid_msg::of13::OFPP_ANY);
+		bucket.watch_group(fluid_msg::of13::OFPG_ANY);
+
+		fluid_msg::ActionSet action_set;
+		// Push the VLAN Tag
+		action_set.add_action(
+			new fluid_msg::of13::PushVLANAction(0x8100));
+		// Set the data in the VLAN Tag
+		SwitchVLANTag vlan_tag;
+		vlan_tag.set_switch(switch_id);
+		vlan_tag.add_to_actions(action_set);
+		// Output the packet over the proper port
+		action_set.add_action(
+			new fluid_msg::of13::OutputAction(
+				new_output_port,
+				fluid_msg::of13::OFPCML_NO_BUFFER));
+
+		// Add the bucket
+		bucket.actions(action_set);
+		group_mod.add_bucket(bucket);
+
+		send_message(group_mod);
+	}
+}
+
+uint32_t PhysicalSwitch::get_forward_group_id(
+		const PhysicalSwitch* physical_switch) {
+	uint32_t group_id;
+	auto switch_group_it = switch_id_to_group_id.find(physical_switch->get_id());
+	if( switch_group_it == switch_id_to_group_id.end() ) {
+		group_id = group_id_allocator.new_id();
+		SwitchForwardGroup& switch_forward_group =
+			switch_id_to_group_id[physical_switch->get_id()];
+		switch_forward_group.group_id = group_id;
+		switch_forward_group.state    = SwitchForwardGroup::State::no_rule;
+	}
+	else {
+		group_id = switch_group_it->second.group_id;
+	}
+	return group_id;
 }
