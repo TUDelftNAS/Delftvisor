@@ -326,7 +326,14 @@ void VirtualSwitch::handle_flow_mod(fluid_msg::of13::FlowMod& flow_mod_message) 
 
 		// Rewrite match in_port
 		fluid_msg::of13::Match match = flow_mod_message.match();
-		ps_ptr->rewrite_match(match,this);
+		if( !ps_ptr->rewrite_match(match,this) ) {
+			// If the flowmod matches on an in_port that is not on this physical
+			// switch it can never trigger on this switch, so don't push it to
+			// the physical switch.
+			BOOST_LOG_TRIVIAL(trace) << *this
+				<< " in_port not on physical switch " << *ps_ptr;
+			continue;
+		}
 		flow_mod_message.match(match);
 
 		// 2 rules need to be pushed to the physical switch

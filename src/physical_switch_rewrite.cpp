@@ -309,7 +309,17 @@ bool PhysicalSwitch::rewrite_match(
 		const VirtualSwitch* virtual_switch) {
 	fluid_msg::of13::InPort* in_port = match.in_port();
 	if( in_port != nullptr ) {
+		// Get the relevant port_map
 		const auto& port_map = virtual_switch->get_port_map(features.datapath_id);
+
+		// If this switch cannot rewrite to the physical port
+		// return that it failed
+		if( !port_map.has_virtual(in_port->value()) ) {
+			return false;
+		}
+
+		// Do the rewriting on the in_port OXM in place
 		in_port->value(port_map.get_physical(in_port->value()));
 	}
+	return true;
 }
