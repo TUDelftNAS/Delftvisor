@@ -6,7 +6,9 @@
 #include "virtual_switch.hpp"
 #include "physical_switch.hpp"
 
-IdAllocator<0,MetadataTag::max_virtual_switch_id> virtual_switch_id_allocator;
+// Start virtual switch id's at 1 so the metadata field
+// is always set in PacketIn messages.
+IdAllocator<1,MetadataTag::max_virtual_switch_id> virtual_switch_id_allocator;
 
 VirtualSwitch::VirtualSwitch(
 		boost::asio::io_service& io,
