@@ -55,8 +55,14 @@ void PhysicalSwitch::register_interest(boost::shared_ptr<VirtualSwitch> switch_p
 	}
 
 	// Create the rewrite entry
-	RewriteEntry& rewrite_entry = rewrite_map[switch_pointer->get_id()];
+	RewriteEntry& rewrite_entry  = rewrite_map[switch_pointer->get_id()];
 	rewrite_entry.flood_group_id = group_id_allocator.new_id();
+
+	// Create the flood group create message
+	fluid_msg::of13::GroupMod group_mod;
+	group_mod.command(fluid_msg::of13::OFPGC_ADD);
+	group_mod.group_type(fluid_msg::of13::OFPGT_ALL);
+	group_mod.group_id(rewrite_entry.flood_group_id);
 
 	// Loop over all virtual ports and reserve group id's to output
 	// for them
@@ -70,7 +76,21 @@ void PhysicalSwitch::register_interest(boost::shared_ptr<VirtualSwitch> switch_p
 		OutputGroup& output_group = rewrite_entry.output_groups[virtual_port];
 		output_group.group_id     = group_id_allocator.new_id();
 		output_group.state        = OutputGroup::State::no_rule;
+
+		// Create the bucket that forward to this virtual port
+		fluid_msg::of13::Bucket bucket;
+		bucket.weight(0);
+		bucket.watch_port(fluid_msg::of13::OFPP_ANY);
+		bucket.watch_group(fluid_msg::of13::OFPG_ANY);
+		fluid_msg::ActionSet action_set;
+		action_set.add_action(
+			new fluid_msg::of13::GroupAction(output_group.group_id));
+		bucket.actions(action_set);
+		group_mod.add_bucket(bucket);
 	}
+
+	// Send the group create message
+	send_message(group_mod);
 }
 
 void PhysicalSwitch::remove_interest(boost::shared_ptr<VirtualSwitch> switch_pointer) {
@@ -94,6 +114,8 @@ void PhysicalSwitch::remove_interest(boost::shared_ptr<VirtualSwitch> switch_poi
 
 		// TODO Delete output group id's and return id's, clear output_groups
 	}
+
+	rewrite_map.erase(switch_pointer->get_id());
 
 	// TODO Delete the used group id's and return id's
 

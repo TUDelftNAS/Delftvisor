@@ -150,7 +150,7 @@ uint32_t PhysicalSwitch::get_rewritten_group_id(
 		const VirtualSwitch* virtual_switch) {
 	// Retrieve the bidirectional_map of group id's
 	bidirectional_map<uint32_t,uint32_t>& group_id_map =
-		rewrite_map[virtual_switch->get_id()]
+		rewrite_map.at(virtual_switch->get_id())
 			.group_id_map;
 
 	// Check if a new id needs to be allocated
@@ -183,18 +183,19 @@ bool PhysicalSwitch::rewrite_action_set(
 				(fluid_msg::of13::OutputAction*) action;
 
 			// Retrieve the output group map
-			std::unordered_map<uint32_t,OutputGroup>& output_groups =
-				rewrite_map[virtual_switch->get_id()]
-					.output_groups;
+			RewriteEntry& rewrite_entry = rewrite_map.at(virtual_switch->get_id());
 
 			// Get the group id to forward to
 			uint32_t group_id;
 			if( output->port()==fluid_msg::of13::OFPP_CONTROLLER ) {
-				group_id = 0; // TODO Special case for output to controller
+				group_id = 0;
+			}
+			else if( output->port()==fluid_msg::of13::OFPP_FLOOD ) {
+				group_id = rewrite_entry.flood_group_id;
 			}
 			else {
-				auto output_group_pair = output_groups.find(output->port());
-				if( output_group_pair == output_groups.end() ) {
+				auto output_group_pair = rewrite_entry.output_groups.find(output->port());
+				if( output_group_pair == rewrite_entry.output_groups.end() ) {
 					BOOST_LOG_TRIVIAL(warning) << *this
 						<< " unknown output port in action list";
 					return false;
@@ -251,18 +252,19 @@ bool PhysicalSwitch::rewrite_action_list(
 				(fluid_msg::of13::OutputAction*) action;
 
 			// Retrieve the output group map
-			std::unordered_map<uint32_t,OutputGroup>& output_groups =
-				rewrite_map[virtual_switch->get_id()]
-					.output_groups;
+			RewriteEntry& rewrite_entry = rewrite_map.at(virtual_switch->get_id());
 
 			// Get the group id to forward to
 			uint32_t group_id;
 			if( output->port()==fluid_msg::of13::OFPP_CONTROLLER ) {
-				group_id = 0; // TODO Special case for output to controller
+				group_id = 0;
+			}
+			else if( output->port()==fluid_msg::of13::OFPP_FLOOD ) {
+				group_id = rewrite_entry.flood_group_id;
 			}
 			else {
-				auto output_group_pair = output_groups.find(output->port());
-				if( output_group_pair == output_groups.end() ) {
+				auto output_group_pair = rewrite_entry.output_groups.find(output->port());
+				if( output_group_pair == rewrite_entry.output_groups.end() ) {
 					BOOST_LOG_TRIVIAL(warning) << *this
 						<< " unknown output port in action list";
 					return false;

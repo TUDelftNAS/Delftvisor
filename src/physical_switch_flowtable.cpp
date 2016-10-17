@@ -292,8 +292,6 @@ void PhysicalSwitch::update_dynamic_rules() {
 		}
 	}
 
-	// TODO Update FLOOD port group
-
 	// Figure out what to do with traffic meant for a different switch
 	for( const auto& switch_it : hypervisor->get_physical_switches() ) {
 		int other_id = switch_it.first;
