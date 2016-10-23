@@ -462,11 +462,14 @@ void PhysicalSwitch::handle_multipart_reply_group_features(fluid_msg::of13::Mult
 
 void PhysicalSwitch::handle_multipart_reply_meter_features(fluid_msg::of13::MultipartReplyMeterFeatures& multipart_reply_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received meter features";
-	if( (multipart_reply_message.meter_features().band_types()&fluid_msg::of13::OFPMBT_DROP) == 0 ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support drop meter band type";
-	}
-	if( multipart_reply_message.meter_features().max_meter() < hypervisor->get_slices().size() ) {
-		BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support enough meters";
+
+	if( hypervisor->get_use_meters() ) {
+		if( (multipart_reply_message.meter_features().band_types()&fluid_msg::of13::OFPMBT_DROP) == 0 ) {
+			BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support drop meter band type";
+		}
+		if( multipart_reply_message.meter_features().max_meter() < hypervisor->get_slices().size() ) {
+			BOOST_LOG_TRIVIAL(error) << *this << " switch doesn't support enough meters";
+		}
 	}
 
 	meter_features = multipart_reply_message.meter_features();

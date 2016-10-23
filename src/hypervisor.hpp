@@ -22,6 +22,9 @@ private:
 	/// The slices in this hypervisor
 	std::list<Slice> slices;
 
+	/// If meters are used in this instance
+	bool use_meters;
+
 	/// The allocator for physical switch id's
 	IdAllocator<0,VLANTag::max_switch_id> physical_switch_id_allocator;
 	/// The physical switches registered at this hypervisor
@@ -63,6 +66,9 @@ public:
 
 	/// Loopkup a virtual switch by switch id
 	VirtualSwitch* get_virtual_switch(int switch_id) const;
+
+	/// Return if this hypervisor uses meters
+	bool get_use_meters() const;
 
 	/// Get the physical switches in the hypervisor
 	const std::unordered_map<int,PhysicalSwitch::pointer>& get_physical_switches() const;

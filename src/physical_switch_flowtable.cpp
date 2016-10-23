@@ -63,21 +63,22 @@ void PhysicalSwitch::create_static_rules() {
 	}
 
 	// Create the meters per slice
-	// TODO Conditionally try to add meters?
 	// TODO Doesn't work with slices created after this physical switch
-	for( const Slice& slice : hypervisor->get_slices() ) {
-		fluid_msg::of13::MeterMod meter_mod;
-		meter_mod.command(fluid_msg::of13::OFPMC_ADD);
-		meter_mod.flags(fluid_msg::of13::OFPMF_PKTPS);
-		meter_mod.meter_id(slice.get_id()+1); // TODO Document this better, meter id's start at 1
-		meter_mod.add_band(
-			new fluid_msg::of13::MeterBand(
-				fluid_msg::of13::OFPMBT_DROP,
-				slice.get_max_rate(),
-				0)); // Burst needs to be 0 unless flag burst is used
+	if( hypervisor->get_use_meters() ) {
+		for( const Slice& slice : hypervisor->get_slices() ) {
+			fluid_msg::of13::MeterMod meter_mod;
+			meter_mod.command(fluid_msg::of13::OFPMC_ADD);
+			meter_mod.flags(fluid_msg::of13::OFPMF_PKTPS);
+			meter_mod.meter_id(slice.get_id()+1); // TODO Document this better, meter id's start at 1
+			meter_mod.add_band(
+				new fluid_msg::of13::MeterBand(
+					fluid_msg::of13::OFPMBT_DROP,
+					slice.get_max_rate(),
+					0)); // Burst needs to be 0 unless flag burst is used
 
-		// Send the message
-		send_message(meter_mod);
+			// Send the message
+			send_message(meter_mod);
+		}
 	}
 
 	// Create the group that sends the packet back to the controller
@@ -137,7 +138,8 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// should be.
 		Port::State current_state;
 		// The virtual switch id in case this port has state host
-		int virtual_switch_id;
+		unsigned int virtual_switch_id;
+		unsigned int slice_id;
 		if( port.link != nullptr ) {
 			// If this port has a link is that it's state
 			current_state = Port::State::link_rule;
@@ -154,7 +156,9 @@ void PhysicalSwitch::update_dynamic_rules() {
 				// Extract the id of the virtual switch, there is
 				// likely a better way to extract something from a set if
 				// you know there is only 1 item, but this works
-				virtual_switch_id = (*(needed_it->second.begin()))->get_id();
+				auto& virtual_switch = (*(needed_it->second.begin()));
+				virtual_switch_id = virtual_switch->get_id();
+				slice_id          = virtual_switch->get_slice()->get_id();
 			}
 			else {
 				// In all other occasions this port should go down
@@ -195,10 +199,11 @@ void PhysicalSwitch::update_dynamic_rules() {
 		}
 		else if( current_state == Port::State::host_rule ) {
 			// Add the meter instruction
-			// TODO Conditionally try to add meter instruction?
-			//flowmod_0.add_instruction(
-			//	new fluid_msg::of13::Meter(
-			//		slice_id+1));
+			if( hypervisor->get_use_meters() ) {
+				flowmod_0.add_instruction(
+					new fluid_msg::of13::Meter(
+						slice_id+1));
+			}
 			// Goto the tenant tables
 			flowmod_0.add_instruction(
 				new fluid_msg::of13::GoToTable(2));
@@ -275,10 +280,11 @@ void PhysicalSwitch::update_dynamic_rules() {
 					new fluid_msg::of13::PopVLANAction());
 				flowmod.add_instruction(apply_actions);
 				// Add the meter instruction
-				// TODO Conditionally try to add meter instruction?
-				//flowmod.add_instruction(
-				//	new fluid_msg::of13::Meter(
-				//		virtual_switch->get_slice()->get_id()+1));
+				if( hypervisor->get_use_meters() ) {
+					flowmod.add_instruction(
+						new fluid_msg::of13::Meter(
+							virtual_switch->get_slice()->get_id()+1));
+				}
 				MetadataTag metadata_tag;
 				metadata_tag.set_group(false);
 				metadata_tag.set_virtual_switch(virtual_switch->get_id());

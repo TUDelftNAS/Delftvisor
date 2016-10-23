@@ -123,6 +123,10 @@ const std::list<Slice>& Hypervisor::get_slices() const {
 	return slices;
 }
 
+bool Hypervisor::get_use_meters() const {
+	return use_meters;
+}
+
 void Hypervisor::start() {
 	// Register the handler for signals
 	signals.async_wait(boost::bind(
@@ -257,6 +261,9 @@ void Hypervisor::load_configuration( std::string filename ) {
 
 	// Start listening for physical switches
 	start_listening(config_tree.get<int>("switch_endpoint_port"));
+
+	// Retrieve if meters are used
+	use_meters = config_tree.get<bool>("use_meters");
 
 	// Create the internal structure
 	for( const auto &slice_pair : config_tree.get_child("slices") ) {
