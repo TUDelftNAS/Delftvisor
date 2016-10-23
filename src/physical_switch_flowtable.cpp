@@ -114,10 +114,10 @@ void PhysicalSwitch::update_dynamic_rules() {
 	// with packets that arrive over a certain link and the rules in table 1
 	// with priority 10 determining what to do with packets that have
 	// arrived over a link and want to be send out over a port on this switch.
-	for( const auto& port_pair : ports ) {
+	for( auto& port_pair : ports ) {
 		// Alias the values that are iterated over
 		const uint32_t& port_no = port_pair.first;
-		const Port& port = port_pair.second;
+		Port& port = port_pair.second;
 
 		// Start building the message to update table 0
 		fluid_msg::of13::FlowMod flowmod_0;
@@ -167,7 +167,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		}
 
 		// Look what state this port had previously
-		Port::State prev_state = port.state;
+		const Port::State& prev_state = port.state;
 		if( prev_state == Port::State::no_rule ) {
 			// There is no rule known about this port
 			flowmod_0.command(fluid_msg::of13::OFPFC_ADD);
@@ -183,7 +183,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		}
 
 		// Save the updated state
-		ports[port_no].state = current_state;
+		port.state = current_state;
 
 		BOOST_LOG_TRIVIAL(info) << *this << " updating port rule for port "
 			<< port_no << " to " << current_state;
@@ -249,7 +249,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Update shared link forwarding rules, the rules in table 1 with id 30
 		auto needed_ports_it = needed_ports.find(port_no);
 		if( needed_ports_it != needed_ports.end() ) {
-			for( auto virtual_switch : needed_ports_it->second ) {
+			for( auto& virtual_switch : needed_ports_it->second ) {
 				fluid_msg::of13::FlowMod flowmod;
 				flowmod.table_id(1);
 				flowmod.priority(30);
@@ -378,11 +378,11 @@ void PhysicalSwitch::update_dynamic_rules() {
 			// those below
 			PhysicalSwitch::pointer physical_switch =
 				hypervisor->get_physical_switch_by_datapath_id(physical_dpid);
-			PhysicalSwitch::OutputGroup& output_group =
+			OutputGroup& output_group =
 				rewrite_entry.output_groups.at(virtual_port);
 
 			// Determine what state this rule should have
-			PhysicalSwitch::OutputGroup::State new_state;
+			OutputGroup::State new_state;
 			uint32_t new_output_port;
 
 			// If it is a port on this switch
@@ -396,21 +396,21 @@ void PhysicalSwitch::update_dynamic_rules() {
 				auto port_it = ports.find(new_output_port);
 				// If the port is not yet found or to a host
 				if( port_it==ports.end() || port_it->second.link==nullptr ) {
-					new_state = PhysicalSwitch::OutputGroup::State::host_rule;
+					new_state = OutputGroup::State::host_rule;
 				}
 				// If the port is to a shared link
 				else {
-					new_state = PhysicalSwitch::OutputGroup::State::shared_link_rule;
+					new_state = OutputGroup::State::shared_link_rule;
 				}
 			}
 			// If it is a port on another switch that is 1 hop away
 			else if(dist.at(physical_switch->get_id()) == 1) {
-				new_state       = PhysicalSwitch::OutputGroup::State::switch_one_hop_rule;
+				new_state       = OutputGroup::State::switch_one_hop_rule;
 				new_output_port = next.at(physical_switch->get_id());
 			}
 			// If it is a port on another switch
 			else {
-				new_state       = PhysicalSwitch::OutputGroup::State::switch_rule;
+				new_state       = OutputGroup::State::switch_rule;
 				new_output_port = next.at(physical_switch->get_id());
 			}
 
@@ -424,7 +424,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 			// Create the new group to
 			fluid_msg::of13::GroupMod group_mod;
 			// If this group doesn't exist it is an add command
-			if( output_group.state == PhysicalSwitch::OutputGroup::State::no_rule ) {
+			if( output_group.state == OutputGroup::State::no_rule ) {
 				group_mod.command(fluid_msg::of13::OFPGC_ADD);
 			}
 			// Otherwise it is an edit command
@@ -446,13 +446,13 @@ void PhysicalSwitch::update_dynamic_rules() {
 
 			// Determine what actions to add to the bucket and do it
 			fluid_msg::ActionSet action_set;
-			if( new_state == PhysicalSwitch::OutputGroup::State::host_rule ) {
+			if( new_state == OutputGroup::State::host_rule ) {
 				action_set.add_action(
 					new fluid_msg::of13::OutputAction(
 						new_output_port,
 						fluid_msg::of13::OFPCML_NO_BUFFER));
 			}
-			else if( new_state == PhysicalSwitch::OutputGroup::State::shared_link_rule ) {
+			else if( new_state == OutputGroup::State::shared_link_rule ) {
 				// Push the VLAN Tag
 				action_set.add_action(
 					new fluid_msg::of13::PushVLANAction(0x8100));
@@ -469,7 +469,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 						new_output_port,
 						fluid_msg::of13::OFPCML_NO_BUFFER));
 			}
-			else if( new_state == PhysicalSwitch::OutputGroup::State::switch_one_hop_rule ) {
+			else if( new_state == OutputGroup::State::switch_one_hop_rule ) {
 				// Push the VLAN Tag
 				action_set.add_action(
 					new fluid_msg::of13::PushVLANAction(0x8100));
