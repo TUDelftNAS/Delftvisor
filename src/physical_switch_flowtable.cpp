@@ -178,8 +178,8 @@ void PhysicalSwitch::update_dynamic_rules() {
 			if( prev_state == current_state ) {
 				continue;
 			}
-			flowmod_0.command(fluid_msg::of13::OFPFC_MODIFY);
-			flowmod_1.command(fluid_msg::of13::OFPFC_MODIFY);
+			flowmod_0.command(fluid_msg::of13::OFPFC_MODIFY_STRICT);
+			flowmod_1.command(fluid_msg::of13::OFPFC_MODIFY_STRICT);
 		}
 
 		// Save the updated state
@@ -331,7 +331,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 			flowmod.command(fluid_msg::of13::OFPFC_ADD);
 		}
 		else if( current_exists && next_exists ) {
-			flowmod.command(fluid_msg::of13::OFPFC_MODIFY);
+			flowmod.command(fluid_msg::of13::OFPFC_MODIFY_STRICT);
 		}
 		else {
 			flowmod.command(fluid_msg::of13::OFPFC_DELETE);
