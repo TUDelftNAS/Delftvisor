@@ -330,6 +330,26 @@ void PhysicalSwitch::print_to_stream(std::ostream& os) const {
 	os << "[PhysicalSwitch id=" << id << ", dpid=" << features.datapath_id << "]";
 }
 
+const std::string PhysicalSwitch::Port::state_to_string(State state) {
+	switch(state) {
+		case no_rule:   return "no_rule";
+		case link_rule: return "link_rule";
+		case host_rule: return "host_rule";
+		case drop_rule: return "drop_rule";
+		default:        return "invalid value";
+	}
+}
+
+const std::string PhysicalSwitch::OutputGroup::state_to_string(State state) {
+	switch(state) {
+		case no_rule:          return "no_rule";
+		case host_rule:        return "host_rule";
+		case shared_link_rule: return "shared_link_rule";
+		case switch_rule:      return "switch_rule";
+		default:               return "invalid value";
+	}
+}
+
 void PhysicalSwitch::handle_error(fluid_msg::of13::Error& error_message) {
 	BOOST_LOG_TRIVIAL(info) << *this
 		<< " received error Type=" << error_message.err_type()

@@ -79,11 +79,13 @@ private:
 		//int id;
 		/// Save per port what rule in the first flow table is pushed
 		enum State {
+			no_rule,
 			link_rule,
 			host_rule,
-			drop_rule,
-			no_rule
+			drop_rule
 		} state;
+		/// Translate a port state to a string for debugging
+		static const std::string state_to_string(State state);
 		/// If this port has a link to another switch
 		boost::shared_ptr<DiscoveredLink> link;
 		/// The data concerning this port
@@ -127,16 +129,16 @@ private:
 			no_rule,
 			host_rule,
 			shared_link_rule,
-			switch_one_hop_rule,
 			switch_rule
 		} state;
+		/// Translate an output group state to a string
+		static const std::string state_to_string(State state);
 		/// The physical port this rule currently outputs over
 		uint32_t output_port;
 	};
 	/// An entry with the rewrite information for 1 virtual switch
 	struct RewriteEntry {
 		/// The group id for the flood action
-		// TODO Where should this be set?
 		uint32_t flood_group_id;
 		/// A bidirectional mapping between virtual group id <-> physical group id
 		bidirectional_map<uint32_t,uint32_t> group_id_map;
