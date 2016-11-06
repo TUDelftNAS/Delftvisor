@@ -96,6 +96,10 @@ private:
 		uint32_t,
 		Port> ports;
 
+	struct NeededPort {
+		bool rule_installed;
+		boost::shared_ptr<VirtualSwitch> virtual_switch;
+	};
 	/// The ports that are searched for on this switch, port_id -> set<VirtualSwitch*>
 	/**
 	 * This structure is separate from ports since not all
@@ -103,7 +107,8 @@ private:
 	 */
 	std::unordered_map<
 		uint32_t,
-		std::set<boost::shared_ptr<VirtualSwitch>>> needed_ports;
+		// A map from virtual switch id -> NeededPort
+		std::unordered_map<uint32_t,NeededPort>> needed_ports;
 
 	/// Handle information about a port we received
 	/**
@@ -113,7 +118,7 @@ private:
 	 * updates the ports information and updates the virtual
 	 * switches if necessary.
 	 */
-	void handle_port( fluid_msg::of13::Port& port, uint8_t reason );
+	void handle_port(fluid_msg::of13::Port& port, uint8_t reason);
 
 	/// Allocate valid group id's
 	/**

@@ -156,9 +156,9 @@ void PhysicalSwitch::update_dynamic_rules() {
 				// Extract the id of the virtual switch, there is
 				// likely a better way to extract something from a set if
 				// you know there is only 1 item, but this works
-				auto& virtual_switch = (*(needed_it->second.begin()));
-				virtual_switch_id = virtual_switch->get_id();
-				slice_id          = virtual_switch->get_slice()->get_id();
+				auto& needed_port = (needed_it->second.begin())->second;
+				virtual_switch_id = needed_port.virtual_switch->get_id();
+				slice_id          = needed_port.virtual_switch->get_slice()->get_id();
 			}
 			else {
 				// In all other occasions this port should go down
@@ -167,7 +167,14 @@ void PhysicalSwitch::update_dynamic_rules() {
 		}
 
 		// Look what state this port had previously
-		const Port::State& prev_state = port.state;
+		const Port::State prev_state = port.state;
+
+		BOOST_LOG_TRIVIAL(error) << *this
+			<< " Looping over port " << port_no
+			<< " prev=" << Port::state_to_string(prev_state)
+			<< " curr=" << Port::state_to_string(current_state)
+			<< " for port " << port_no;
+
 		if( prev_state == Port::State::no_rule ) {
 			// There is no rule known about this port
 			flowmod_0.command(fluid_msg::of13::OFPFC_ADD);
@@ -185,8 +192,8 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Save the updated state
 		port.state = current_state;
 
-		BOOST_LOG_TRIVIAL(info) << *this << " updating port rule for port "
-			<< port_no << " to " << current_state;
+		BOOST_LOG_TRIVIAL(error) << *this << " Updating port rule for port "
+			<< port_no << " to " << Port::state_to_string(current_state);
 
 		// Add the in-port match to flowmod_0
 		flowmod_0.add_oxm_field(
@@ -217,84 +224,108 @@ void PhysicalSwitch::update_dynamic_rules() {
 			// If current_state==Port::State::drop_rule don't add any actions
 		}
 
-		// Add the match to flowmod_1
-		PortVLANTag vlan_tag;
-		vlan_tag.set_port(port_no);
-		vlan_tag.add_to_match(flowmod_1);
-
-		// Set the actions for flowmod_1
-		fluid_msg::of13::WriteActions write_actions;
-		if( current_state == Port::State::host_rule ) {
-			// Remove the VLAN Tag before forwarding to a host
-			write_actions.add_action(
-				new fluid_msg::of13::PopVLANAction());
-		}
-		else if( current_state == Port::State::link_rule ) {
-			// Rewrite the port VLAN Tag to a shared link tag
-			PortVLANTag vlan_tag;
-			vlan_tag.set_port(VLANTag::max_port_id);
-			vlan_tag.add_to_actions(write_actions);
-		}
-		// TODO What about drop rule?
-		write_actions.add_action(
-			new fluid_msg::of13::OutputAction(
-				port_no,
-				fluid_msg::of13::OFPCML_NO_BUFFER));
-		flowmod_1.add_instruction(write_actions);
-
-		// Send the flowmods
+		// Send the first message
 		send_message(flowmod_0);
-		send_message(flowmod_1);
 
-		// Update shared link forwarding rules, the rules in table 1 with id 30
-		auto needed_ports_it = needed_ports.find(port_no);
-		if( needed_ports_it != needed_ports.end() ) {
-			for( auto& virtual_switch : needed_ports_it->second ) {
-				fluid_msg::of13::FlowMod flowmod;
-				flowmod.table_id(1);
-				flowmod.priority(30);
-				flowmod.buffer_id(OFP_NO_BUFFER);
-				if( prev_state!=Port::State::link_rule &&
-						current_state==Port::State::link_rule) {
-					flowmod.command(fluid_msg::of13::OFPFC_ADD);
-				}
-				else if( prev_state==Port::State::link_rule &&
-						current_state!=Port::State::link_rule ) {
-					flowmod.command(fluid_msg::of13::OFPFC_DELETE);
-				}
-				else {
-					continue;
-				}
+		// Flowmod 1 needs to be duplicated for each slice in the Hypervisor
+		for( const Slice& slice : hypervisor->get_slices() ) {
+			// Copy the already constructed message for each slice
+			fluid_msg::of13::FlowMod flowmod_1_copy(flowmod_1);
 
-				// Create the match
-				PortVLANTag vlan_tag;
-				vlan_tag.set_port(VLANTag::max_port_id);
-				vlan_tag.set_slice(virtual_switch->get_slice()->get_id());
-				vlan_tag.add_to_match(flowmod);
-				flowmod.add_oxm_field(
-					new fluid_msg::of13::InPort(port_no));
+			// Add the match to flowmod_1_copy
+			VLANTag vlan_tag;
+			vlan_tag.set_switch(id);
+			vlan_tag.set_port(port_no);
+			vlan_tag.set_slice(slice.get_id());
+			vlan_tag.add_to_match(flowmod_1_copy);
 
-				// Add the actions
-				fluid_msg::of13::ApplyActions apply_actions;
-				apply_actions.add_action(
+			// Set the actions for flowmod_1_copy
+			fluid_msg::of13::WriteActions write_actions;
+			if( current_state == Port::State::host_rule ) {
+				// Remove the VLAN Tag before forwarding to a host
+				write_actions.add_action(
 					new fluid_msg::of13::PopVLANAction());
-				flowmod.add_instruction(apply_actions);
-				// Add the meter instruction
-				if( hypervisor->get_use_meters() ) {
-					flowmod.add_instruction(
-						new fluid_msg::of13::Meter(
-							virtual_switch->get_slice()->get_id()+1));
-				}
-				MetadataTag metadata_tag;
-				metadata_tag.set_group(false);
-				metadata_tag.set_virtual_switch(virtual_switch->get_id());
-				metadata_tag.add_to_instructions(flowmod);
-				flowmod.add_instruction(
-					new fluid_msg::of13::GoToTable(2));
-
-				// Send the message
-				send_message( flowmod );
 			}
+			else if( current_state == Port::State::link_rule ) {
+				// Rewrite the port VLAN Tag to a shared link tag
+				VLANTag vlan_tag;
+				vlan_tag.set_switch(VLANTag::max_switch_id);
+				vlan_tag.set_port(VLANTag::max_port_id);
+				vlan_tag.set_slice(slice.get_id());
+				vlan_tag.add_to_actions(write_actions);
+			}
+			// TODO What about drop rule?
+			write_actions.add_action(
+				new fluid_msg::of13::OutputAction(
+					port_no,
+					fluid_msg::of13::OFPCML_NO_BUFFER));
+			flowmod_1_copy.add_instruction(write_actions);
+
+			// Send the flowmods
+			send_message(flowmod_1_copy);
+		}
+	}
+
+	// Update shared link forwarding rules, the rules in table 1 with id 30
+	for( auto& needed_port_pair : needed_ports ) {
+		const uint32_t& port_no = needed_port_pair.first;
+		const Port& port = ports.at(needed_port_pair.first);
+		for( auto& needed_port_pair_2 : needed_port_pair.second ) {
+			NeededPort& needed_port = needed_port_pair_2.second;
+
+			// Start building the flowmod
+			fluid_msg::of13::FlowMod flowmod;
+			flowmod.table_id(1);
+			flowmod.priority(30);
+			flowmod.buffer_id(OFP_NO_BUFFER);
+
+			// Figure out if we need to create/delete the rule
+			if( !needed_port.rule_installed && port.state==Port::State::link_rule) {
+				flowmod.command(fluid_msg::of13::OFPFC_ADD);
+				needed_port.rule_installed = true;
+			}
+			else if( needed_port.rule_installed && port.state!=Port::State::link_rule ) {
+				flowmod.command(fluid_msg::of13::OFPFC_DELETE);
+				needed_port.rule_installed = false;
+			}
+			else {
+				continue;
+			}
+
+			BOOST_LOG_TRIVIAL(error) << *this
+				<< " Update rule 1,30 with port state="
+				<< Port::state_to_string(port.state)
+				<< " for port " << port_no;
+
+			// Create the match
+			VLANTag vlan_tag;
+			vlan_tag.set_switch(VLANTag::max_switch_id);
+			vlan_tag.set_port(VLANTag::max_port_id);
+			vlan_tag.set_slice(needed_port.virtual_switch->get_slice()->get_id());
+			vlan_tag.add_to_match(flowmod);
+			flowmod.add_oxm_field(
+				new fluid_msg::of13::InPort(port_no));
+
+			// Add the actions
+			fluid_msg::of13::ApplyActions apply_actions;
+			apply_actions.add_action(
+				new fluid_msg::of13::PopVLANAction());
+			flowmod.add_instruction(apply_actions);
+			// Add the meter instruction
+			if( hypervisor->get_use_meters() ) {
+				flowmod.add_instruction(
+					new fluid_msg::of13::Meter(
+						needed_port.virtual_switch->get_slice()->get_id()+1));
+			}
+			MetadataTag metadata_tag;
+			metadata_tag.set_group(false);
+			metadata_tag.set_virtual_switch(needed_port.virtual_switch->get_id());
+			metadata_tag.add_to_instructions(flowmod);
+			flowmod.add_instruction(
+				new fluid_msg::of13::GoToTable(2));
+
+			// Send the message
+			send_message(flowmod);
 		}
 	}
 
@@ -512,12 +543,12 @@ void PhysicalSwitch::print_detailed(std::ostream& os) const {
 	for( auto port_pair : ports ) {
 		os << "\t\t{\n";
 		os << "\t\t\tid = " << port_pair.first << "\n";
-		os << "\t\t\tstate = " << port_pair.second.state << "\n";
+		os << "\t\t\tstate = " << Port::state_to_string(port_pair.second.state) << "\n";
 		os << "\t\t\tneeded-ports = { ";
 		auto needed_port_it = needed_ports.find(port_pair.first);
 		if( needed_port_it != needed_ports.end() ) {
-			for( auto vs_ptr : needed_port_it->second ) {
-				os << *vs_ptr << " ";
+			for( auto vs_ptr_pair : needed_port_it->second ) {
+				os << *(vs_ptr_pair.second.virtual_switch) << " ";
 			}
 		}
 		os << "}\n";

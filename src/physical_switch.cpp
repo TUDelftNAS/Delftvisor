@@ -51,7 +51,10 @@ void PhysicalSwitch::register_interest(boost::shared_ptr<VirtualSwitch> switch_p
 			switch_pointer
 			->get_port_map(features.datapath_id)
 			.get_virtual_to_physical() ) {
-		needed_ports[port_map_pair.second].insert(switch_pointer);
+		NeededPort needed_port;
+		needed_port.rule_installed = false;
+		needed_port.virtual_switch = switch_pointer;
+		needed_ports[port_map_pair.second][switch_pointer->get_id()] = needed_port;
 	}
 
 	// Create the rewrite entry
@@ -99,7 +102,7 @@ void PhysicalSwitch::remove_interest(boost::shared_ptr<VirtualSwitch> switch_poi
 	// Remove the needed ports
 	for( auto& port_map_pair :
 			switch_pointer->get_port_map(features.datapath_id).get_virtual_to_physical() ) {
-		needed_ports.at(port_map_pair.second).erase(switch_pointer);
+		needed_ports.at(port_map_pair.second).erase(switch_pointer->get_id());
 	}
 
 	// Retrieve the rewrite_entry
@@ -257,7 +260,8 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 
 		uint32_t physical_port_no = port.port_no();
 
-		for( auto& switch_pointer : switch_pointers->second ) {
+		for( auto& switch_pointer_pair : switch_pointers->second ) {
+			auto& switch_pointer = switch_pointer_pair.second.virtual_switch;
 			// Skip if this virtual switch is not online
 			if( !switch_pointer->is_connected() ) continue;
 
