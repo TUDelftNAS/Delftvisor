@@ -272,7 +272,7 @@ void Hypervisor::load_configuration( std::string filename ) {
 		int max_rate   = slice_ptree.get<int>("max_rate");
 		std::string ip = slice_ptree.get_child("controller").get<std::string>("ip");
 		int port       = slice_ptree.get_child("controller").get<int>("port");
-		slices.emplace_back( slices.size(), max_rate, ip, port, this );
+		slices.emplace_back( slices.size()+1, max_rate, ip, port, this );
 
 		Slice& slice = slices.back();
 
