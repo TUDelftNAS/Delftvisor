@@ -152,27 +152,6 @@ private:
 	 * created.
 	 */
 	std::unordered_map<int, RewriteEntry> rewrite_map;
-	/// An entry in the switch forward group
-	struct SwitchForwardGroup {
-		uint32_t group_id;
-		uint32_t output_port;
-		enum State {
-			no_rule,
-			forward_rule
-		} state;
-	};
-	/// A mapping from physical switch id -> group id
-	/**
-	 * Every physical switch has a group that forward to it,
-	 * this map contains the group id reserved to forward to
-	 * that switch. This group is only used when the switch
-	 * is more than 1 hop away from this switch. These groups
-	 * are created reactively when needed.
-	 */
-	std::unordered_map<int, SwitchForwardGroup> switch_id_to_group_id;
-	/// Get a group id to forward traffic to
-	uint32_t get_forward_group_id(
-		const PhysicalSwitch* physical_switch);
 
 
 	/// The timer that when fired sends a topology discovery packet

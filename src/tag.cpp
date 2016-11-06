@@ -33,14 +33,6 @@ VLANTag::VLANTag(uint16_t raw) {
 		((raw>>1)&(make_mask(3)<<12));
 }
 
-void VLANTag::set_type(type_t type) {
-	set_value<1,0>(type);
-}
-
-VLANTag::type_t VLANTag::get_type() const {
-	return (VLANTag::type_t)get_value<1,0>();
-}
-
 uint16_t VLANTag::make_raw() const {
 	// This assumes tag&mask==tag
 	return (tag&make_mask(12)) |
@@ -75,6 +67,8 @@ void VLANTag::add_to_actions(ActionSet& action_set) const {
 	uint16_t vid_tag = tag       & make_mask(12);
 	uint16_t pcp_tag = (tag>>12) & make_mask( 3);
 
+
+	// The OFPVID_PRESENT is also needed when using the set-field action
 	action_set.add_action(
 		new fluid_msg::of13::SetFieldAction(
 			new fluid_msg::of13::VLANVid(
@@ -84,7 +78,43 @@ void VLANTag::add_to_actions(ActionSet& action_set) const {
 			new fluid_msg::of13::VLANPcp(pcp_tag)));
 }
 
-namespace{
+void VLANTag::set_switch(unsigned int switch_id) {
+	set_value<
+		VLANTag::num_switch_bits,
+		0>(switch_id);
+}
+
+unsigned int VLANTag::get_switch() const {
+	return get_value<
+		VLANTag::num_switch_bits,
+		0>();
+}
+
+void VLANTag::set_port(unsigned int port_id) {
+	set_value<
+		VLANTag::num_port_bits,
+		VLANTag::num_switch_bits>(port_id);
+}
+
+unsigned int VLANTag::get_port() const {
+	return get_value<
+		VLANTag::num_port_bits,
+		VLANTag::num_switch_bits>();
+}
+
+void VLANTag::set_slice(unsigned int slice_id) {
+	set_value<
+		VLANTag::num_slice_bits,
+		VLANTag::num_switch_bits+VLANTag::num_port_bits>(slice_id);
+}
+
+unsigned int VLANTag::get_slice() const {
+	return get_value<
+		VLANTag::num_slice_bits,
+		VLANTag::num_switch_bits+VLANTag::num_port_bits>();
+}
+
+namespace {
 	// Force versions of add_to_actions<> using write or apply
 	// actions to be available during linking
 	void ugly_hack() {
@@ -92,54 +122,12 @@ namespace{
 		fluid_msg::of13::ApplyActions a;
 		fluid_msg::ActionList l;
 		fluid_msg::ActionSet s;
-		SwitchVLANTag t;
+		VLANTag t;
 		t.add_to_actions(w);
 		t.add_to_actions(a);
 		t.add_to_actions(l);
 		t.add_to_actions(s);
 	}
-}
-
-SwitchVLANTag::SwitchVLANTag() : VLANTag::VLANTag() {
-	set_type(VLANTag::switch_tag);
-}
-
-SwitchVLANTag::SwitchVLANTag(uint16_t raw) :
-		VLANTag::VLANTag(raw) {
-	set_type(VLANTag::switch_tag);
-}
-
-void SwitchVLANTag::set_switch(unsigned int switch_id) {
-	set_value<VLANTag::num_switch_bits,1>(switch_id);
-}
-
-unsigned int SwitchVLANTag::get_switch() const {
-	return get_value<VLANTag::num_switch_bits,1>();
-}
-
-PortVLANTag::PortVLANTag() : VLANTag::VLANTag() {
-	set_type(VLANTag::port_tag);
-}
-
-PortVLANTag::PortVLANTag(uint16_t raw) :
-		VLANTag::VLANTag(raw) {
-	set_type(VLANTag::port_tag);
-}
-
-void PortVLANTag::set_slice(unsigned int slice_id) {
-	set_value<VLANTag::num_slice_bits,1>(slice_id);
-}
-
-unsigned int PortVLANTag::get_slice() const {
-	return get_value<VLANTag::num_slice_bits,1>();
-}
-
-void PortVLANTag::set_port(unsigned int port_id) {
-	set_value<VLANTag::num_port_bits,1+VLANTag::num_slice_bits>(port_id);
-}
-
-unsigned int PortVLANTag::get_port() const {
-	return get_value<VLANTag::num_port_bits,1+VLANTag::num_slice_bits>();
 }
 
 MetadataTag::MetadataTag() :

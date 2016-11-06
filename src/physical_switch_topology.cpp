@@ -19,7 +19,7 @@ void PhysicalSwitch::make_topology_discovery_rule() {
 	flowmod.buffer_id(OFP_NO_BUFFER);
 
 	// Create the match
-	PortVLANTag vlan_tag;
+	VLANTag vlan_tag;
 	vlan_tag.set_slice(VLANTag::max_slice_id);
 	vlan_tag.add_to_match(flowmod);
 
@@ -89,18 +89,14 @@ void PhysicalSwitch::send_topology_discovery_message(
 	uint32_t port_number = it->first;
 
 	// Create the data and mask with the slice/switch/port information
-	PortVLANTag vlan_tag_1;
-	vlan_tag_1.set_slice(VLANTag::max_slice_id);
-	vlan_tag_1.set_port(port_number);
-	SwitchVLANTag vlan_tag_2;
-	vlan_tag_2.set_switch(id);
-	uint16_t vlan_tag_1_raw = vlan_tag_1.make_raw();
-	uint16_t vlan_tag_2_raw = vlan_tag_2.make_raw();
+	VLANTag vlan_tag;
+	vlan_tag.set_switch(id);
+	vlan_tag.set_port(port_number);
+	vlan_tag.set_slice(VLANTag::max_slice_id);
+	uint16_t vlan_tag_raw = vlan_tag.make_raw();
 	// Set the vlan values in the packet
-	topology_discovery_packet[14] = (vlan_tag_1_raw>>8) & 0xff;
-	topology_discovery_packet[15] = vlan_tag_1_raw & 0xff;
-	topology_discovery_packet[18] = (vlan_tag_2_raw>>8) & 0xff;
-	topology_discovery_packet[19] = vlan_tag_2_raw & 0xff;
+	topology_discovery_packet[14] = (vlan_tag_raw>>8) & 0xff;
+	topology_discovery_packet[15] = vlan_tag_raw & 0xff;
 
 	// Create the packet out message
 	fluid_msg::of13::PacketOut packet_out;
@@ -135,21 +131,17 @@ void PhysicalSwitch::handle_topology_discovery_packet_in(
 	struct EthernetHeader {
 		uint8_t mac_dst[6];
 		uint8_t mac_src[6];
-		uint8_t ether_type_1[2];
-		uint8_t vlan_tag_1[2];
-		uint8_t ether_type_2[2];
-		uint8_t vlan_tag_2[2];
+		uint8_t ether_type[2];
+		uint8_t vlan_tag[2];
 	};
 	EthernetHeader * packet = (EthernetHeader*) packet_in_message.data();
 	// Interpret the vlan tag disregarding endianness
-	uint16_t vlan_id_1_raw = packet->vlan_tag_1[0]*256+packet->vlan_tag_1[1];
-	PortVLANTag vlan_id_1(vlan_id_1_raw);
-	uint16_t vlan_id_2_raw = packet->vlan_tag_2[0]*256+packet->vlan_tag_2[1];
-	SwitchVLANTag vlan_id_2(vlan_id_2_raw);
+	uint16_t vlan_id_raw = packet->vlan_tag[0]*256+packet->vlan_tag[1];
+	VLANTag vlan_id(vlan_id_raw);
 
 	// Extract the relevant information from the VLAN tag
-	uint32_t port  = vlan_id_1.get_port();
-	int switch_num = vlan_id_2.get_switch();
+	uint32_t port  = vlan_id.get_port();
+	int switch_num = vlan_id.get_switch();
 
 	// Extract the slice id to see if this is for topology discovery
 	BOOST_LOG_TRIVIAL(trace) << *this

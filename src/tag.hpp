@@ -41,26 +41,10 @@ protected:
 class VLANTag : public Tag<uint16_t> {
 protected:
 
-	/// Create a vlan tag without a tag or mask set
-	VLANTag();
-	/// Initialize a vlan tag from raw bytes
-	VLANTag(uint16_t raw);
-
 	/// The amount of bits per field
-	static constexpr int num_switch_bits = 14;
-	static constexpr int num_slice_bits  = 7;
-	static constexpr int num_port_bits   = 7;
-
-	/// The possible types of VLAN Tag
-	enum type_t {
-		switch_tag = 0,
-		port_tag   = 1
-	};
-
-	/// Set the type for this VLAN Tag
-	void set_type(type_t type);
-	/// Get the type for this VLAN Tag
-	type_t get_type() const;
+	static constexpr int num_switch_bits = 7;
+	static constexpr int num_slice_bits  = 4;
+	static constexpr int num_port_bits   = 4;
 
 	/// Create a tag from raw bytes going over the wire
 	static uint16_t parse_from_raw(uint16_t raw);
@@ -69,6 +53,10 @@ public:
 	static constexpr uint16_t max_switch_id = make_mask(num_switch_bits);
 	static constexpr uint16_t max_port_id   = make_mask(num_port_bits);
 
+	/// Create a vlan tag without a tag or mask set
+	VLANTag();
+	/// Initialize a vlan tag from raw bytes
+	VLANTag(uint16_t raw);
 	/// Make the raw bytes as they go over the wire
 	uint16_t make_raw() const;
 
@@ -81,38 +69,19 @@ public:
 	 */
 	template<class ActionSet>
 	void add_to_actions(ActionSet& action_set) const;
-};
-
-/// A switch VLAN Tag
-class SwitchVLANTag : public VLANTag {
-public:
-	/// Create an empty switch VLAN Tag
-	SwitchVLANTag();
-	/// Create a switch VLAN tag from raw bytes
-	SwitchVLANTag(uint16_t raw);
 
 	/// Set the switch value
 	void set_switch(unsigned int switch_id);
 	/// Get the switch value
 	unsigned int get_switch() const;
-};
-
-/// A port VLAN Tag
-class PortVLANTag : public VLANTag {
-public:
-	/// Create an empty port VLAN Tag
-	PortVLANTag();
-	/// Create a port VLAN Tag from raw bytes
-	PortVLANTag(uint16_t raw);
-
-	/// Set the slice value
-	void set_slice(unsigned int slice_id);
-	/// Get the slice value
-	unsigned int get_slice() const;
 	/// Set the port value
 	void set_port(unsigned int port_id);
 	/// Get the port value
 	unsigned int get_port() const;
+	/// Set the slice value
+	void set_slice(unsigned int slice_id);
+	/// Get the slice value
+	unsigned int get_slice() const;
 };
 
 class MetadataTag : public Tag<uint64_t> {
