@@ -29,4 +29,4 @@ include_directories(${Boost_INCLUDE_DIRS})
 target_link_libraries(hypervisor ${Boost_LIBRARIES})
 
 # Needed to get boost log to compile
-add_definitions(-DBOOST_LOG_DYN_LINK -g)
+add_definitions(-DBOOST_LOG_DYN_LINK -DBOOST_USE_VALGRIND -g)
