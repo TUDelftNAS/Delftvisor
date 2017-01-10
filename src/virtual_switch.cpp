@@ -164,7 +164,7 @@ void VirtualSwitch::go_down() {
 	}
 }
 
-bool VirtualSwitch::is_connected() {
+bool VirtualSwitch::is_connected() const {
 	return state==connected;
 }
 

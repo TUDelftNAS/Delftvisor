@@ -111,7 +111,7 @@ public:
 	/// Tell this virtual switch to go down
 	void go_down();
 	/// Returns if this switch is currently connected
-	bool is_connected();
+	bool is_connected() const;
 
 	/// Print this virtual switch to a stream
 	void print_to_stream(std::ostream& os) const;
