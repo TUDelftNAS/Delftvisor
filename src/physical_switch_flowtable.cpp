@@ -269,7 +269,15 @@ void PhysicalSwitch::update_dynamic_rules() {
 	// Update shared link forwarding rules, the rules in table 1 with id 30
 	for( auto& needed_port_pair : needed_ports ) {
 		const uint32_t& port_no = needed_port_pair.first;
-		const Port& port = ports.at(needed_port_pair.first);
+
+		// Not every needed port actually exists on this switch
+		auto port_it = ports.find(needed_port_pair.first);
+		if( port_it == ports.end() ) {
+			continue;
+		}
+		const Port& port = port_it->second;
+
+		// Loop over all virtual switches that need this port
 		for( auto& needed_port_pair_2 : needed_port_pair.second ) {
 			NeededPort& needed_port = needed_port_pair_2.second;
 
