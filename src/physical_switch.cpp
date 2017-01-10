@@ -200,11 +200,17 @@ void PhysicalSwitch::start() {
 }
 
 void PhysicalSwitch::stop() {
-	// Stop the generic connection handling
-	OpenflowConnection::stop();
-
 	// Stop the topology discovery
 	topology_discovery_timer.cancel();
+
+	// Stop all the discovered links
+	for( auto& port : ports ) {
+		auto link = port.second.link;
+		if( link != nullptr ) link->stop();
+	}
+
+	// Stop the generic connection handling
+	OpenflowConnection::stop();
 
 	// Remove this switch from the registry
 	if( state == unregistered ) {
@@ -214,11 +220,6 @@ void PhysicalSwitch::stop() {
 		hypervisor->unregister_physical_switch(features.datapath_id,id);
 	}
 
-	// Stop all the discovered links
-	for( auto& port : ports ) {
-		auto link = port.second.link;
-		if( link != nullptr ) link->stop();
-	}
 
 	// Let the entire network recalculate, this is done to assure
 	// that a virtual switch that only depended on this switch also
@@ -249,6 +250,9 @@ void PhysicalSwitch::handle_port( fluid_msg::of13::Port& port, uint8_t reason ) 
 	else {
 		if( reason == fluid_msg::of13::OFPPR_DELETE ) {
 			// Delete this port from the switch
+			if( ports.at(port.port_no()).link != nullptr ) {
+				ports.at(port.port_no()).link->stop();
+			}
 			ports.erase(port.port_no());
 			port_status_message.reason(fluid_msg::of13::OFPPR_DELETE);
 		}
