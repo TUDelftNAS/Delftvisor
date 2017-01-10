@@ -100,9 +100,13 @@ void PhysicalSwitch::remove_interest(boost::shared_ptr<VirtualSwitch> switch_poi
 	BOOST_LOG_TRIVIAL(trace) << *switch_pointer << " removed interest at " << *this;
 
 	// Remove the needed ports
-	for( auto& port_map_pair :
-			switch_pointer->get_port_map(features.datapath_id).get_virtual_to_physical() ) {
+	for( auto& port_map_pair : switch_pointer
+			->get_port_map(features.datapath_id)
+			.get_virtual_to_physical() ) {
 		needed_ports.at(port_map_pair.second).erase(switch_pointer->get_id());
+		if( needed_ports.at(port_map_pair.second).size() == 0 ) {
+			needed_ports.erase(port_map_pair.second);
+		}
 	}
 
 	// Retrieve the rewrite_entry
