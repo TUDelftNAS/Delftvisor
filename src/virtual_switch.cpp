@@ -135,24 +135,24 @@ void VirtualSwitch::stop() {
 	// Stop any work in the backoff timer
 	connection_backoff_timer.cancel();
 
+	// Remove registration of this virtual switch with the physical switches
+	for( const auto& dep_sw : dependent_switches ) {
+		auto sw_ptr =
+			hypervisor->
+				get_physical_switch_by_datapath_id(dep_sw.first);
+
+		sw_ptr->remove_interest(shared_from_this());
+
+		// Update the port rule
+		sw_ptr->update_dynamic_rules();
+	}
+
 	// If we the connection was stopped by the controller
 	// immediately try again
 	if( state==connected ) {
 		BOOST_LOG_TRIVIAL(info) << *this <<
 			" connection dropped, trying again";
 		try_connect();
-
-		// Remove registration of this virtual switch with the physical switches
-		for( const auto& dep_sw : dependent_switches ) {
-			auto sw_ptr =
-				hypervisor->
-					get_physical_switch_by_datapath_id(dep_sw.first);
-
-			sw_ptr->remove_interest(shared_from_this());
-
-			// Update the port rule
-			sw_ptr->update_dynamic_rules();
-		}
 	}
 }
 
