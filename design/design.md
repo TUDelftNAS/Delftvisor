@@ -112,9 +112,9 @@ The following section describes the layout of flow rules the Hypervisor.
 
 Priority | Purpose | Amount | Cookie | Match | Instructions
 ---------|---------|--------|--------|-------|-------------
-20 | Forward Hypervisor topology discovery packets | 1 | 1 | vlan-type=port, vlan-slice=slice-max | output(controller)
-10 | Detect that traffic has arrived over a port with a link | #of ports with links | port | in-port=z | goto-tbl(1)
+20 | Forward Hypervisor topology discovery packets | 1 | 1 | vlan-slice=slice-max | output(controller)
 10 | Act like packets arrived from the controller arrived over a shared link | 1 | port | in-port=controller | goto-tbl(1)
+10 | Detect that traffic has arrived over a port with a link | # of ports with links | port | in-port=z | goto-tbl(1)
 10 | Forward new packet to personal flowtables | # of ports without link in a virtual switch | port | in-port=z | meter(n), write-metadata-group-bit, write-metadata-virtual-switch-bits, goto-tbl(2)
 10 | Drop packets that don't belong in a virtual switch | # of ports without link not in a virtual switch | port | in-port=z | drop
  0 | Error detection rule | 1 | 2 | \* | output(controller)
@@ -123,11 +123,10 @@ Priority | Purpose | Amount | Cookie | Match | Instructions
 
 Priority | Purpose | Amount | Cookie | Match | Instructions
 ---------|---------|--------|--------|-------|-------------
-30 | Forward message over shared link to virtual switch flowtable | # of virtual switches | virtual switch id | in-port=y, vlan-type=port, vlan-port=max-port, vlan-slice=z | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-virtual-switch-bits, goto-tbl(2)
-20 | Forward message to other switch | # of switches - 1 | switch id | vlan-type=switch, vlan-switch=z | output(a)
-20 | Forward message to other switch that is 1 hop away | # of switches - 1 | switch id | vlan-type=switch, vlan-switch=z | pop-vlan, output(a)
-10 | Output preprocessed message over port with link | # of ports | port | vlan-type=port, vlan-port=z | vlan-port=max-port, output(a)
-10 | Output preprocessed message over port without link | # of ports | port | vlan-type=port, vlan-port=z | pop-vlan, output(a)
+30 | Forward message over shared link to virtual switch flowtable | # of virtual ports on this switch | virtual switch id | in-port=y, vlan-switch=max-switch, vlan-port=max-port, vlan-slice=z | pop-vlan, meter(n), write-metadata-group-bit, write-metadata-virtual-switch-bits, goto-tbl(2)
+20 | Forward message to other switch | # of switches - 1 | switch id | vlan-switch=z | output(a)
+10 | Output preprocessed message over port with link | # of virtual ports \* # of slices | virtual-port | vlan-switch=x, vlan-port=y, vlan-slice=z | vlan-switch=max-switch, vlan-port=max-port, vlan-slice=z, output(a)
+10 | Output preprocessed message over port without link | # of virtual ports \* # of slices | virtual-port | vlan-switch=x, vlan-port=y, vlan-slice=z | pop-vlan, output(a)
  0 | Error detection rule | 1 | 3 | \* | output(controller)
 
 ## Table n | n>=2, tenant tables
@@ -140,12 +139,11 @@ Priority | Purpose | Amount | Match | Instructions
 
 Purpose | Id | Amount | Mode | Buckets
 --------|----|--------|------|--------
-Output over to host | Concatenation of virtual-switch-bits, port-bits | # of ports \* # of virtual switches | Indirect | bucket(output(a))
-Output over shared link | Concatenation of virtual-switch-bits, port-bits | # of ports \* # of virtual switches | Indirect | bucket(push-vlan, vlan-type=port, vlan-slice=a, vlan-port=max-port, output(b))
-Output to port 1 hop away | Concatenation of virtual-switch-bits, port-bits | # of ports \* # of virtual switches | Indirect | bucket(push-vlan, vlan-type=port, vlan-slice=a, vlan-port=b, output(c))
-Output to port multiple hop away | Concatenation of virtual-switch-bits, port-bits | # of ports \* # of virtual switches | Indirect | bucket(push-vlan, vlan-type=port, vlan-slice=a, vlan-port=b, group(c))
-Add switch VLAN Tag and output packet | 2^13+switch-id | # of switches - 1 | Indirect | bucket(push-vlan, vlan-type=switch, vlan-switch=a, output(b))
-Simulate FLOOD output action | 2^26+virtual-switch-id | # of virtual switches | All | bucket(group(x)), etc
+Output to controller | 0 | 1 | Indirect | bucket(output(controller))
+Output to host | - | # of virtual ports \* # of virtual switches | Indirect | bucket(output(a))
+Output over shared link | - | # of virtual ports \* # of virtual switches | Indirect | bucket(push-vlan, vlan-switch=max-switch, vlan-port=max-port, vlan-slice=a, output(b))
+Output to port on other switch | - | # of virtual ports \* # of virtual switches | Indirect | bucket(push-vlan, vlan-switch=a, vlan-port=b, vlan-slice=c, output(c))
+Simulate FLOOD output action | - | # of virtual switches | All | bucket(group(x)), etc
 
 ## Meter tables
 The first n meter tables are reserved where n is the number of slices.
