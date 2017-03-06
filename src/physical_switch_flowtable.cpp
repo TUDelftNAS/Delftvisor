@@ -169,7 +169,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Look what state this port had previously
 		const Port::State prev_state = port.state;
 
-		BOOST_LOG_TRIVIAL(error) << *this
+		BOOST_LOG_TRIVIAL(trace) << *this
 			<< " Looping over port " << port_no
 			<< " prev=" << Port::state_to_string(prev_state)
 			<< " curr=" << Port::state_to_string(current_state)
@@ -192,7 +192,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 		// Save the updated state
 		port.state = current_state;
 
-		BOOST_LOG_TRIVIAL(error) << *this << " Updating port rule for port "
+		BOOST_LOG_TRIVIAL(trace) << *this << " Updating port rule for port "
 			<< port_no << " to " << Port::state_to_string(current_state);
 
 		// Add the in-port match to flowmod_0
@@ -300,7 +300,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 				continue;
 			}
 
-			BOOST_LOG_TRIVIAL(error) << *this
+			BOOST_LOG_TRIVIAL(trace) << *this
 				<< " Update rule 1,30 with port state="
 				<< Port::state_to_string(port.state)
 				<< " for port " << port_no;
