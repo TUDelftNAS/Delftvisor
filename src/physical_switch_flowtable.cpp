@@ -404,6 +404,11 @@ void PhysicalSwitch::update_dynamic_rules() {
 		const VirtualSwitch* virtual_switch =
 			hypervisor->get_virtual_switch(virtual_switch_id);
 
+		// If this switch is down skip these entries. This can happen when a
+		// link goes down causing multiple virtual switches to fail. In that
+		// case no next port is found towards the needed ports of that switch.
+		if( virtual_switch->is_down() ) continue;
+
 		// Loop over all ports on the virtual switch
 		for( auto& port_pair : virtual_switch->get_port_to_physical_switch() ) {
 			const uint32_t& virtual_port  = port_pair.first;

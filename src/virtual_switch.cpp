@@ -143,8 +143,15 @@ void VirtualSwitch::stop() {
 
 		sw_ptr->remove_interest(shared_from_this());
 
-		// Update the port rule
-		sw_ptr->update_dynamic_rules();
+		// Update the port rule if this virtual switch was stopped
+		// because of connection problems. If this virtual switch
+		// was stopped because the topology changed will the physical
+		// switches be updated afterwards, this prevents the function
+		// update_dynamic_rules from running while some switches that
+		// should go down aren't down yet.
+		if( state==connected ) {
+			sw_ptr->update_dynamic_rules();
+		}
 	}
 
 	// If we the connection was stopped by the controller
@@ -162,6 +169,10 @@ void VirtualSwitch::go_down() {
 		state = down;
 		stop();
 	}
+}
+
+bool VirtualSwitch::is_down() const {
+	return state==down;
 }
 
 bool VirtualSwitch::is_connected() const {

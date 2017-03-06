@@ -110,6 +110,8 @@ public:
 
 	/// Tell this virtual switch to go down
 	void go_down();
+	/// Returns if this switch is currently down
+	bool is_down() const;
 	/// Returns if this switch is currently connected
 	bool is_connected() const;
 
