@@ -444,10 +444,12 @@ void PhysicalSwitch::handle_packet_in(fluid_msg::of13::PacketIn& packet_in_messa
 		// Get the switch to send the packet in to
 		VirtualSwitch* virtual_switch =
 			hypervisor->get_virtual_switch(metadata_tag.get_virtual_switch());
-		// Rewrite the in port
-		const auto& port_map = virtual_switch->get_port_map(features.datapath_id);
 		// Rewrite the in port to the virtual in port
+		const auto& port_map = virtual_switch->get_port_map(features.datapath_id);
 		in_port_tlv->value(port_map.get_virtual(in_port_tlv->value()));
+		// Always remove the buffer information, it becomes difficult to keep
+		// track on what physical switch the message is actually buffered.
+		packet_in_message.buffer_id(OFP_NO_BUFFER);
 		// Send the message
 		virtual_switch->send_message(packet_in_message);
 	}
