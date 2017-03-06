@@ -293,7 +293,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 				needed_port.rule_installed = true;
 			}
 			else if( needed_port.rule_installed && port.state!=Port::State::link_rule ) {
-				flowmod.command(fluid_msg::of13::OFPFC_DELETE);
+				flowmod.command(fluid_msg::of13::OFPFC_DELETE_STRICT);
 				needed_port.rule_installed = false;
 			}
 			else {
@@ -373,7 +373,7 @@ void PhysicalSwitch::update_dynamic_rules() {
 			flowmod.command(fluid_msg::of13::OFPFC_MODIFY_STRICT);
 		}
 		else {
-			flowmod.command(fluid_msg::of13::OFPFC_DELETE);
+			flowmod.command(fluid_msg::of13::OFPFC_DELETE_STRICT);
 		}
 
 		if( next_exists ) {
