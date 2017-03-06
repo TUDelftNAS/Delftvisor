@@ -25,6 +25,7 @@ void OpenflowConnection::handle_network_error(
 		const boost::system::error_code& error) {
 	switch( error.value() ) {
 	case boost::asio::error::operation_aborted:
+	case boost::asio::error::bad_descriptor:
 		// Do nothing, this probably means that stop
 		// was called on this connection.
 		break;
