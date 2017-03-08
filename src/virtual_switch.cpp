@@ -141,6 +141,10 @@ void VirtualSwitch::stop() {
 			hypervisor->
 				get_physical_switch_by_datapath_id(dep_sw.first);
 
+		// If the physical switch is already offline it will go
+		// out of scope and we don't need to remove our interest.
+		if( sw_ptr == nullptr ) continue;
+
 		sw_ptr->remove_interest(shared_from_this());
 
 		// Update the port rule if this virtual switch was stopped
