@@ -293,22 +293,30 @@ void VirtualSwitch::handle_barrier_request(fluid_msg::of13::BarrierRequest& barr
 void VirtualSwitch::handle_packet_out(fluid_msg::of13::PacketOut& packet_out_message) {
 	BOOST_LOG_TRIVIAL(info) << *this << " received packet_out";
 
-	if( packet_out_message.in_port() != fluid_msg::of13::OFPP_CONTROLLER ) {
-		// TODO Logical handling of other in_ports
-		BOOST_LOG_TRIVIAL(warning) << *this
-			<< " received packet_out where in_port!=controller";
-		return;
+	// The physicalswitch to send the packet to
+	PhysicalSwitch::pointer ps_ptr;
+
+	if( packet_out_message.in_port() == fluid_msg::of13::OFPP_CONTROLLER ) {
+		// TODO Find a better switch to output over, scan action list to
+		// see what port it would be output to and send it to that switch
+
+		// Send the packet to the first found switch
+		ps_ptr = hypervisor->get_physical_switch_by_datapath_id(
+				dependent_switches.begin()->first);
 	}
+	else {
+		uint64_t dependent_switch_dpid = port_to_dependent_switch.at(packet_out_message.in_port());
+		// If the in_port isn't controller this packet_out has to be sent
+		// to the switch that contains the port in in_port.
+		ps_ptr = hypervisor->get_physical_switch_by_datapath_id(
+				dependent_switch_dpid);
 
-	// TODO Buffer id rewriting?
-
-	// TODO Find a better switch to output over, scan action list to
-	// see what port it would be output to and send it to that switch
-
-	// Send the packet to the first found switch
-	PhysicalSwitch::pointer ps_ptr =
-		hypervisor->get_physical_switch_by_datapath_id(
-			dependent_switches.begin()->first);
+		// Rewrite the in_port
+		packet_out_message.in_port(
+			dependent_switches
+				.at(dependent_switch_dpid)
+				.port_map.get_physical(packet_out_message.in_port()));
+	}
 
 	// Rewrite the action list
 	fluid_msg::ActionList old_action_list = packet_out_message.actions();
