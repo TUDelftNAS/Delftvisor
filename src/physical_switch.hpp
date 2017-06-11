@@ -21,7 +21,7 @@ namespace topology {
 	/// itself but is also longer than the longest possible path in the
 	/// network.
 	constexpr int infinite = 10000;
-	constexpr int period   = 1000; // The period to send all topology messages in in ms
+	constexpr int period   = 500; // The period to send all topology messages in in ms
 }
 
 class PhysicalSwitch : public OpenflowConnection {

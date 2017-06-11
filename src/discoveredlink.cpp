@@ -64,7 +64,7 @@ int DiscoveredLink::get_port_number(int switch_id) const {
 void DiscoveredLink::reset_timer() {
 	// Reset the expiry date to further in the future
 	liveness_timer.expires_from_now(
-		boost::posix_time::milliseconds(2100));
+		boost::posix_time::milliseconds(550));
 	// When the expiration changes the handler is called
 	// with error code operation_aborted
 	liveness_timer.async_wait(
