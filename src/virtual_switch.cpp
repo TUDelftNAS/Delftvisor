@@ -269,6 +269,8 @@ void VirtualSwitch::handle_features_request(fluid_msg::of13::FeaturesRequest& fe
 	n_tables -= 2;
 	// Statistics are not supported in this version of the hypervisor
 	capabilities &= fluid_msg::of13::OFPC_IP_REASM | fluid_msg::of13::OFPC_PORT_BLOCKED;
+	// Buffers are also not available
+	n_buffers = 0;
 
 	// Create the response message
 	fluid_msg::of13::FeaturesReply features_reply(
