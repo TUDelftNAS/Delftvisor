@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.5.2)
-project(Hypervisor)
+project(Delftvisor)
 
 # Get libfluid to build
 include(ExternalProject)

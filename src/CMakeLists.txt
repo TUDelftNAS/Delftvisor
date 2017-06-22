@@ -1,7 +1,7 @@
 # We are using C++11
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(hypervisor
+add_executable(delftvisor
 	main.cpp
 	hypervisor.cpp
 	slice.cpp
@@ -17,7 +17,7 @@ add_executable(hypervisor
 	tag.cpp)
 
 include_directories(${LibFluid_INCLUDE_DIRS})
-target_link_libraries(hypervisor ${LibFluid_LIBRARIES})
+target_link_libraries(delftvisor ${LibFluid_LIBRARIES})
 
 # Find and link with boost
 find_package(Boost
@@ -26,7 +26,7 @@ find_package(Boost
 	system program_options thread log
 )
 include_directories(${Boost_INCLUDE_DIRS})
-target_link_libraries(hypervisor ${Boost_LIBRARIES})
+target_link_libraries(delftvisor ${Boost_LIBRARIES})
 
 # Needed to get boost log to compile
 add_definitions(-DBOOST_LOG_DYN_LINK -DBOOST_USE_VALGRIND -g)
