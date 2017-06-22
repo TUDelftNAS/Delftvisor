@@ -1,0 +1,149 @@
+{
+	"switch_endpoint_port" : 6633,
+	"use_meters"           : false,
+	"slices" : [
+		{
+			"controller" : {
+				"ip"   : "127.0.0.1",
+				"port" : 6653
+			},
+			"max_rate"         : 500,
+			"virtual_switches" : [
+				{
+					"datapath_id" : 100,
+					"ports" : [
+						{
+							"virtual_port"         : 10,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 11,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 12,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 1
+						},
+						{
+							"virtual_port"         : 13,
+							"physical_datapath_id" : 4,
+							"physical_port"        : 1
+						}
+					]
+				}
+			]
+		},
+		{
+			"controller" : {
+				"ip"   : "127.0.0.1",
+				"port" : 6654
+			},
+			"max_rate"         : 500,
+			"virtual_switches" : [
+				{
+					"datapath_id" : 200,
+					"ports" : [
+						{
+							"virtual_port"         : 20,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 2
+						},
+						{
+							"virtual_port"         : 21,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 3
+						},
+						{
+							"virtual_port"         : 22,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 4
+						},
+						{
+							"virtual_port"         : 23,
+							"physical_datapath_id" : 1,
+							"physical_port"        : 5
+						}
+					]
+				},
+				{
+					"datapath_id" : 201,
+					"ports" : [
+						{
+							"virtual_port"         : 30,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 2
+						},
+						{
+							"virtual_port"         : 31,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 3
+						},
+						{
+							"virtual_port"         : 32,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 4
+						},
+						{
+							"virtual_port"         : 33,
+							"physical_datapath_id" : 2,
+							"physical_port"        : 5
+						}
+					]
+				},
+				{
+					"datapath_id" : 202,
+					"ports" : [
+						{
+							"virtual_port"         : 40,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 2
+						},
+						{
+							"virtual_port"         : 41,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 3
+						},
+						{
+							"virtual_port"         : 42,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 4
+						},
+						{
+							"virtual_port"         : 43,
+							"physical_datapath_id" : 3,
+							"physical_port"        : 5
+						}
+					]
+				},
+				{
+					"datapath_id" : 203,
+					"ports" : [
+						{
+							"virtual_port"         : 50,
+							"physical_datapath_id" : 4,
+							"physical_port"        : 2
+						},
+						{
+							"virtual_port"         : 51,
+							"physical_datapath_id" : 4,
+							"physical_port"        : 3
+						},
+						{
+							"virtual_port"         : 52,
+							"physical_datapath_id" : 4,
+							"physical_port"        : 4
+						},
+						{
+							"virtual_port"         : 53,
+							"physical_datapath_id" : 4,
+							"physical_port"        : 5
+						}
+					]
+				}
+			]
+		}
+	]
+}
